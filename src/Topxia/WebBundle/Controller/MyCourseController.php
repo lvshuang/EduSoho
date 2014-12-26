@@ -4,6 +4,7 @@ namespace Topxia\WebBundle\Controller;
 use Symfony\Component\HttpFoundation\Request;
 use Topxia\Common\Paginator;
 use Topxia\Common\ArrayToolkit;
+use Topxia\WebBundle\Util\AvatarAlert;
 
 class MyCourseController extends BaseController
 {
@@ -54,8 +55,11 @@ class MyCourseController extends BaseController
         );
 
         $userIds = array();
-        foreach ($courses as $course) {
+        foreach ($courses as $key => $course) {
             $userIds = array_merge($userIds, $course['teacherIds']);
+            $learnTime=$this->getCourseService()->searchLearnTime(array('courseId'=>$course['id'],'userId'=>$currentUser['id']));
+            
+            $courses[$key]['learnTime']=intval($learnTime/60)."小时".($learnTime%60)."分钟";
         }
         $users = $this->getUserService()->findUsersByIds($userIds);
 
@@ -97,6 +101,11 @@ class MyCourseController extends BaseController
     protected function getCourseService()
     {
         return $this->getServiceKernel()->createService('Course.CourseService');
+    }
+
+    protected function getSettingService()
+    {
+        return $this->getServiceKernel()->createService('System.SettingService');
     }
 
 }

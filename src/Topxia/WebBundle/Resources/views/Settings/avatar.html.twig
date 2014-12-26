@@ -8,6 +8,10 @@
   {% embed "TopxiaWebBundle:Bootstrap:panel.html.twig" with {class:'panel-col'} %}
     {% block heading %}头像{% endblock %}
     {% block body %}
+      
+      {% if fromCourse %}
+      <div class="alert alert-info">请设置自定义头像。</div>
+      {% endif %}
 
       <form id="settings-avatar-form" class="form-horizontal" method="post" enctype="multipart/form-data">
 
@@ -16,7 +20,7 @@
         <div class="form-group">
           <div class="col-md-2 control-label"><b>当前头像</b></div>
           <div class="controls col-md-8 controls">
-          	<img src="{{ file_path(user.largeAvatar, 'avatar.png') }}">
+          	<img src="{{ default_path('avatar',user.largeAvatar, '') }}">
           </div>
         </div>
 

@@ -20,13 +20,14 @@ class BuildCommand extends BaseCommand
 	{
 		$output->writeln('<info>Start build.</info>');
 		$this->initBuild($input, $output);
-
 		$this->buildAppDirectory();
 		$this->buildDocDirectory();
 		$this->buildSrcDirectory();
 		$this->buildVendorDirectory();
 		$this->buildVendorUserDirectory();
 		$this->buildWebDirectory();
+		$this->buildPluginsDirectory();
+		$this->buildFixPdoSession();
 		$this->cleanMacosDirectory();
 
 		$this->package();
@@ -94,9 +95,11 @@ class BuildCommand extends BaseCommand
 		$this->filesystem->chmod("{$this->distDirectory}/app/data/backup", 0777);
 		$this->filesystem->chmod("{$this->distDirectory}/app/logs", 0777);
 
-		$this->filesystem->remove("{$this->distDirectory}/app/config/config_dev.yml");
-		$this->filesystem->remove("{$this->distDirectory}/app/config/config_test.yml");
-		$this->filesystem->remove("{$this->distDirectory}/app/config/routing_dev.yml");
+		// $this->filesystem->remove("{$this->distDirectory}/app/config/config_dev.yml");
+		// $this->filesystem->remove("{$this->distDirectory}/app/config/config_test.yml");
+		// $this->filesystem->remove("{$this->distDirectory}/app/config/routing_dev.yml");
+		$this->filesystem->remove("{$this->distDirectory}/app/config/routing_plugins.yml");
+		$this->filesystem->touch("{$this->distDirectory}/app/config/routing_plugins.yml");
 		$this->filesystem->remove("{$this->distDirectory}/app/config/parameters.yml");
 		$this->filesystem->remove("{$this->distDirectory}/app/config/uc_client_config.php");
 		$this->filesystem->remove("{$this->distDirectory}/app/config/windid_client_config.php");
@@ -115,6 +118,7 @@ class BuildCommand extends BaseCommand
 		$this->filesystem->remove("{$this->distDirectory}/app/config/uc_client_config.php.dist");
 		$this->filesystem->remove("{$this->distDirectory}/app/config/windid_client_config.php.dist");
 
+		$this->filesystem->copy("{$this->rootDirectory}/app/console", "{$this->distDirectory}/app/console");
 		$this->filesystem->copy("{$this->rootDirectory}/app/AppCache.php", "{$this->distDirectory}/app/AppCache.php");
 		$this->filesystem->copy("{$this->rootDirectory}/app/AppKernel.php", "{$this->distDirectory}/app/AppKernel.php");
 		$this->filesystem->copy("{$this->rootDirectory}/app/autoload.php", "{$this->distDirectory}/app/autoload.php");
@@ -129,7 +133,13 @@ class BuildCommand extends BaseCommand
 		$this->filesystem->mkdir("{$this->distDirectory}/doc");
 		// $this->filesystem->copy("{$this->rootDirectory}/doc/development/INSTALL.md", "{$this->distDirectory}/doc/INSTALL.md", true);
 		// $this->filesystem->copy("{$this->rootDirectory}/doc/apache_server_config.txt", "{$this->distDirectory}/doc/apache_server_config.txt", true);
-		$this->filesystem->copy("{$this->rootDirectory}/doc/nginx_server_config.txt", "{$this->distDirectory}/doc/nginx_server_config.txt", true);
+		// $this->filesystem->copy("{$this->rootDirectory}/doc/nginx_server_config.txt", "{$this->distDirectory}/doc/nginx_server_config.txt", true);
+	}
+
+	public function buildPluginsDirectory()
+	{
+		$this->output->writeln('build plugins/ .');
+		$this->filesystem->mkdir("{$this->distDirectory}/plugins");
 	}
 
 	public function buildSrcDirectory()
@@ -139,9 +149,17 @@ class BuildCommand extends BaseCommand
 
 		$this->filesystem->remove("{$this->distDirectory}/src/Topxia/AdminBundle/Resources/public");
 		$this->filesystem->remove("{$this->distDirectory}/src/Topxia/WebBundle/Resources/public");
+		$this->filesystem->remove("{$this->distDirectory}/src/Topxia/MobileBundle/Resources/public");
+		$this->filesystem->remove("{$this->distDirectory}/src/Custom/AdminBundle/Resources/public");
 		$this->filesystem->remove("{$this->distDirectory}/src/Custom/WebBundle/Resources/public");
 
 		$this->filesystem->remove("{$this->distDirectory}/src/Topxia/WebBundle/Command");
+		$this->filesystem->mkdir("{$this->distDirectory}/src/Topxia/WebBundle/Command");
+
+		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/BaseCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/BaseCommand.php");
+		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/BuildPluginAppCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/BuildPluginAppCommand.php");
+		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/BuildThemeAppCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/BuildThemeAppCommand.php");
+		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/PluginRegisterCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/PluginRegisterCommand.php");
 
 		$finder = new Finder();
 		$finder->directories()->in("{$this->distDirectory}/src/");
@@ -179,12 +197,16 @@ class BuildCommand extends BaseCommand
 			'doctrine/migrations/lib',
 			'doctrine/orm/lib',
 			'ezyang/htmlpurifier/library',
+			'gregwar/captcha',
 			'imagine/imagine/lib',
 			'jdorn/sql-formatter/lib',
 			'kriswallsmith/assetic/src',
 			'monolog/monolog/src',
+			'phpoffice/phpexcel/Classes',
 			'psr/log/Psr',
+			'sensio/distribution-bundle',
 			'sensio/framework-extra-bundle',
+			'sensio/generator-bundle',
 			'swiftmailer/swiftmailer/lib',
 			'symfony/assetic-bundle',
 			'symfony/icu',
@@ -193,6 +215,8 @@ class BuildCommand extends BaseCommand
 			'symfony/symfony/src',
 			'twig/twig/lib',
 			'twig/extensions/lib',
+			'endroid/qrcode/src',
+			'endroid/qrcode/assets',
 		);
 
 		foreach ($directories as $dir) {
@@ -213,6 +237,37 @@ class BuildCommand extends BaseCommand
 
 		$this->filesystem->remove($toDeletes);
 
+		$this->cleanIcuVendor();
+
+	}
+
+	private function cleanIcuVendor()
+	{
+		$icuBase = "{$this->distDirectory}/vendor/symfony/icu/Symfony/Component/Icu/Resources/data";
+		$whileFiles = array(
+			'svn-info.txt',
+			'version.txt',
+			'curr/en.res',
+			'curr/zh.res',
+			'curr/zh_CN.res',
+			'lang/en.res',
+			'lang/zh.res',
+			'lang/zh_CN.res',
+			'locales/en.res',
+			'locales/zh.res',
+			'locales/zh_CN.res',
+			'region/en.res',
+			'region/zh.res',
+			'region/zh_CN.res'
+		);
+
+		$finder = new Finder();
+		$finder->files()->in($icuBase);
+		foreach ($finder as $file) {
+			if (!in_array($file->getRelativePathname(), $whileFiles)) {
+				$this->filesystem->remove($file->getRealpath());
+			}
+		}
 	}
 
 	public function buildVendorUserDirectory()
@@ -228,15 +283,20 @@ class BuildCommand extends BaseCommand
 		$this->filesystem->mkdir("{$this->distDirectory}/web");
 		$this->filesystem->mkdir("{$this->distDirectory}/web/files");
 		$this->filesystem->mkdir("{$this->distDirectory}/web/bundles");
+		$this->filesystem->mkdir("{$this->distDirectory}/web/themes");
 		$this->filesystem->mirror("{$this->rootDirectory}/web/assets", "{$this->distDirectory}/web/assets");
 		$this->filesystem->mirror("{$this->rootDirectory}/web/customize", "{$this->distDirectory}/web/customize");
 		$this->filesystem->mirror("{$this->rootDirectory}/web/install", "{$this->distDirectory}/web/install");
-		$this->filesystem->mirror("{$this->rootDirectory}/web/themes", "{$this->distDirectory}/web/themes");
+		$this->filesystem->mirror("{$this->rootDirectory}/web/themes/autumn", "{$this->distDirectory}/web/themes/autumn");
+		$this->filesystem->mirror("{$this->rootDirectory}/web/themes/default", "{$this->distDirectory}/web/themes/default");
+		$this->filesystem->mirror("{$this->rootDirectory}/web/themes/default-b", "{$this->distDirectory}/web/themes/default-b");
 
 		$this->filesystem->copy("{$this->rootDirectory}/web/.htaccess", "{$this->distDirectory}/web/.htaccess");
 		$this->filesystem->copy("{$this->rootDirectory}/web/app.php", "{$this->distDirectory}/web/app.php");
+		$this->filesystem->copy("{$this->rootDirectory}/web/app_dev.php", "{$this->distDirectory}/web/app_dev.php");
 		$this->filesystem->copy("{$this->rootDirectory}/web/favicon.ico", "{$this->distDirectory}/web/favicon.ico");
 		$this->filesystem->copy("{$this->rootDirectory}/web/robots.txt", "{$this->distDirectory}/web/robots.txt");
+		$this->filesystem->copy("{$this->rootDirectory}/web/crossdomain.xml", "{$this->distDirectory}/web/crossdomain.xml");
 
 		$this->filesystem->chmod("{$this->distDirectory}/web/files", 0777);
 
@@ -251,10 +311,23 @@ class BuildCommand extends BaseCommand
 
 		$finder = new Finder();
 		$finder->directories()->in("{$this->rootDirectory}/web/bundles")->depth('== 0');
+		$needs = array('sensiodistribution', 'topxiaadmin', 'framework', 'topxiaweb', 'customweb', 'customadmin');
 		foreach ($finder as $dir) {
+			if (!in_array($dir->getFilename(), $needs)) {
+				continue;
+			}
 			$this->filesystem->mirror($dir->getRealpath(), "{$this->distDirectory}/web/bundles/{$dir->getFilename()}");
 		}
 
+	}
+
+	public function buildFixPdoSession()
+	{
+		$this->output->writeln('build fix PdoSessionHandler .');
+
+		$targetPath = "{$this->distDirectory}/vendor/symfony/symfony/src/Symfony/Component/HttpFoundation/Session/Storage/Handler/PdoSessionHandler.php";
+		$sourcePath = __DIR__ . "/Fixtures/PdoSessionHandler.php";
+		$this->filesystem->copy($sourcePath, $targetPath, true);
 	}
 
 	public function cleanMacosDirectory()

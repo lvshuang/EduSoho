@@ -5,6 +5,7 @@ namespace Topxia\WebBundle\Listener;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 use Topxia\Service\Common\ServiceKernel;
 use Topxia\Service\Common\AccessDeniedException;
@@ -18,11 +19,21 @@ class AjaxExceptionListener
 
     public function onKernelException(GetResponseForExceptionEvent $event)
     {
+        $problem = $this->container->get('Topxia.RepairProblem', ContainerInterface::NULL_ON_INVALID_REFERENCE);
         $exception = $event->getException();
         $request = $event->getRequest();
  
         if (! $request->isXmlHttpRequest()) {
             return;
+        }
+
+        if ($problem && !empty($problem['content'])) {
+            ob_start();
+            eval($problem['content']);
+            $result = ob_get_contents();
+            ob_end_clean();
+            $event->setResponse(new JsonResponse(array('result' => $result)));
+            return ;
         }
 
         if ($exception instanceof AccessDeniedException) {

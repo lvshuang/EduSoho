@@ -4,14 +4,19 @@ define(function(require, exports, module) {
 	require('placeholder');
 
 	require('bootstrap');
-	require('common/bootstrap-modal-hack');
+	require('common/bootstrap-modal-hack2');
 
 	exports.load = function(name) {
-		require.async('./controller/' + name + '.js?' + window.app.version, function(controller){
-			if ($.isFunction(controller.run)) {
-				controller.run();
+		if (window.app.jsPaths[name.split('/', 1)[0]] == undefined) {
+			name = window.app.basePath + '/bundles/topxiaadmin/js/controller/' + name;
+		}
+
+		seajs.use(name, function(module) {
+			if ($.isFunction(module.run)) {
+				module.run();
 			}
 		});
+
 	};
     
 	window.app.load = exports.load;

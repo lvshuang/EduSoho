@@ -9,6 +9,8 @@ interface CourseMemberDao
 
     public function getMemberByCourseIdAndUserId($courseId, $userId);
 
+    public function getMembersByCourseIds($courseIds);
+
     public function findMembersByUserIdAndRole($userId, $role, $start, $limit, $onlyPublished = true);
 
     public function findMemberCountByUserIdAndRole($userId, $role, $onlyPublished = true);
@@ -22,8 +24,14 @@ interface CourseMemberDao
     public function findMemberCountByCourseIdAndRole($courseId, $role);
 
     public function searchMemberCount($conditions);
+
+    public function searchMembers($conditions, $orderBy, $start, $limit);
     
     public function searchMember($conditions, $start, $limit);
+
+    public function countMembersByStartTimeAndEndTime($startTime,$endTime);
+        
+    public function searchMemberIds($conditions, $orderBy, $start, $limit);
 
     public function addMember($member);
 
@@ -34,4 +42,6 @@ interface CourseMemberDao
     public function deleteMembersByCourseId($courseId);
 
     public function deleteMemberByCourseIdAndUserId($courseId, $userId);
+
+    public function findCourseMembersByUserId($userId);
 }

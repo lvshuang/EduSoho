@@ -2,6 +2,7 @@
 namespace Topxia\WebBundle\Controller;
 
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Topxia\Common\Paginator;
 use Topxia\WebBundle\Form\MessageType;
@@ -95,7 +96,6 @@ class MessageController extends BaseController
     public function createAction(Request $request, $toId)
     {
         $user = $this->getCurrentUser();
-
         $receiver = $this->getUserService()->getUser($toId);
         $form = $this->createForm(new MessageType(), array('receiver'=>$receiver['nickname']));
         if($request->getMethod() == 'POST'){
@@ -163,12 +163,24 @@ class MessageController extends BaseController
 
     public function deleteConversationAction(Request $request, $conversationId)
     {
+        $user = $this->getCurrentUser();
+        $conversation = $this->getMessageService()->getConversation($conversationId);
+        if (empty($conversation) or $conversation['toId'] != $user['id']) {
+            throw $this->createAccessDeniedException('您无权删除此私信！');
+        }
+
         $this->getMessageService()->deleteConversation($conversationId);
         return $this->redirect($this->generateUrl('message'));
     }
 
     public function deleteConversationMessageAction(Request $request, $conversationId, $messageId)
     {
+        $user = $this->getCurrentUser();
+        $conversation = $this->getMessageService()->getConversation($conversationId);
+        if (empty($conversation) or $conversation['toId'] != $user['id']) {
+            throw $this->createAccessDeniedException('您无权删除此私信！');
+        }
+        
         $this->getMessageService()->deleteConversationMessage($conversationId, $messageId);
         $messagesCount = $this->getMessageService()->getConversationMessageCount($conversationId);
         if($messagesCount > 0){
@@ -176,6 +188,37 @@ class MessageController extends BaseController
         }else {
            return $this->redirect($this->generateUrl('message'));
         }
+    }
+
+    public function matchAction(Request $request)
+    {
+        $currentUser = $this->getCurrentUser();
+        $data = array();
+        $queryString = $request->query->get('q');
+        $callback = $request->query->get('callback');
+        $findedUsersByNickname = $this->getUserService()->searchUsers(
+            array('nickname'=>$queryString),
+            array('createdTime', 'DESC'),
+            0,
+            10);
+        $findedFollowingIds = $this->getUserService()->filterFollowingIds($currentUser['id'], 
+            ArrayToolkit::column($findedUsersByNickname, 'id'));
+
+        $filterFollowingUsers = $this->getUserService()->findUsersByIds($findedFollowingIds);
+
+        foreach ($filterFollowingUsers as $filterFollowingUser) {
+            $data[] = array(
+                'id' => $filterFollowingUser['id'], 
+                'nickname' => $filterFollowingUser['nickname']
+            );
+        }
+
+        return new JsonResponse($data);
+    }
+
+    private function getWebExtension()
+    {
+        return $this->container->get('topxia.twig.web_extension');
     }
 
     protected function getUserService(){

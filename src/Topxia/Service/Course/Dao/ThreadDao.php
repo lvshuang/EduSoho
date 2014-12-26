@@ -6,9 +6,13 @@ interface ThreadDao
 {
 	public function getThread($id);
 
+	public function findLatestThreadsByType($type, $start, $limit);
+
 	public function findThreadsByUserIdAndType($userId, $type);
 
 	public function findThreadsByCourseId($courseId, $orderBy, $start, $limit);
+
+	public function findEliteThreadsByType($type, $status, $start, $limit);
 
 	public function findThreadsByCourseIdAndType($courseId, $type, $orderBy, $start, $limit);
 

@@ -2,6 +2,8 @@
 /app/bootstrap.php.cache
 /app/cache/*
 /app/config/parameters.yml
+/app/data/discuz/
+/app/data/plugin_installed.php
 /app/logs/*
 /build
 /files
@@ -11,11 +13,15 @@
 /app/data/private_files/*
 /app/data/backup/*
 /app/data/upgrade/*
+/app/config/routing_plugins.yml
+/plugins/*
 /build/
 /vendor/
 /bin/
 /composer.phar
+/scripts
 /etc/sublimetext2/edusoho.sublime-workspace
+/etc/UpgradeScripts
 /web/files/*
 !/web/files/.gitkeep
 /web/customize/*
@@ -27,7 +33,10 @@ src/Topxia/Service/Util/DirectCloudClient.php
 src/Topxia/WebBundle/Controller/TestController.php
 src/Topxia/WebBundle/Resources/views/Test/*
 app/data/install.lock
+app/data/plugin_installed.php
 /web/themes/*
 !/web/themes/autumn
 !/web/themes/default
 !/web/themes/default-b
+edusoho.komodoproject
+.publish

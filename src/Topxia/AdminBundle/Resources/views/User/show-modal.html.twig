@@ -32,7 +32,7 @@
     <td>
       {{ user.createdTime|date('Y-n-d H:i:s') }}
       /
-      {{ user.createdIp }}
+      {{ user.createdIp }} {{convertIP(user.createdIp)}}
     </td>
   </tr>
 
@@ -45,7 +45,7 @@
           {{ user.loginTime|date('Y-n-d H:i:s') }}
       {% endif %}
       {% if user.loginIp|default is not empty %}
-           / {{ user.loginIp }}
+           / {{ user.loginIp }} {{convertIP(user.loginIp)}}
       {% endif %}
      </td>
   </tr>
@@ -62,10 +62,78 @@
   </tr>
 
   <tr>
-    <th>姓别</th>
+    <th>性别</th>
     <td>
       {% if profile.gender %}
-        {{ profile.gender }}
+        {% if profile.gender == 'male' %}男性{% endif %}
+        {% if profile.gender == 'female' %}女性{% endif %}
+        {% if profile.gender == 'secret' %}秘密{% endif %}
+      {% else %}
+        暂无
+      {% endif %}
+    </td>
+  </tr>
+
+{#   <tr>
+    <th>类型</th>
+    <td>
+      {% if profile.iam %}
+        {{ profile.iam }}
+      {% else %}
+        暂无
+      {% endif %}
+    </td>
+  </tr> #}
+ 
+   <tr>
+    <th>身份证号</th>
+    <td>
+      {% if profile.idcard %}
+        {{ profile.idcard }}
+      {% else %}
+        暂无
+      {% endif %}
+    </td>
+  </tr>
+
+  <tr>
+    <th>手机号码</th>
+    <td>
+      {% if profile.mobile %}
+        {{ profile.mobile }}
+      {% else %}
+        暂无
+      {% endif %}
+    </td>
+  </tr>
+
+{#   <tr>
+    <th>学校</th>
+    <td>
+      {% if profile.school %}
+        {{ profile.school }}
+      {% else %}
+        暂无
+      {% endif %}
+    </td>
+  </tr>
+
+  <tr>
+    <th>班级</th>
+    <td>
+      {% if profile.class %}
+        {{ profile.class }}
+      {% else %}
+        暂无
+      {% endif %}
+    </td>
+  </tr> #}
+
+  <tr>
+    <th>公司</th>
+    <td>
+      {% if profile.company %}
+        {{ profile.company }}
       {% else %}
         暂无
       {% endif %}
@@ -82,6 +150,7 @@
       {% endif %}
     </td>
   </tr>
+
 
   <tr>
     <th>头衔</th>
@@ -159,8 +228,29 @@
       {% endif %}
     </td>
   </tr>
-</table>
 
+</table>
+<hr>
+<table class="table table-striped table-condenseda table-bordered">
+    {% if fields %}
+  {% for field in fields %}
+    <tr>
+        <th width="25%">{{field.title}}</th>
+        <td>
+          {% if profile[field.fieldName] %}
+            {% if field.type=="date"%}
+            {{ profile[field.fieldName]|date("Y-m-d") }}
+            {% else %}
+            {{ profile[field.fieldName] }}
+            {% endif %}
+          {% else %}
+            暂无
+          {% endif %}
+        </td>
+    </tr>
+  {% endfor %}
+  {% endif %}
+  </table>
 {% endblock %}
 
 {% block footer %}

@@ -5,122 +5,216 @@ use Symfony\Component\HttpFoundation\Request;
 use Topxia\Common\ArrayToolkit;
 use Topxia\Common\StringToolkit;
 use Topxia\Component\Payment\Payment;
+use Topxia\WebBundle\Util\AvatarAlert;
 use Symfony\Component\HttpFoundation\Response;
 
-class CourseOrderController extends BaseController
+class CourseOrderController extends OrderController
 {
+    public $courseId = 0;
 
     public function buyAction(Request $request, $id)
-    {
+    {   
+        $course = $this->getCourseService()->getCourse($id);
+
         $user = $this->getCurrentUser();
+
         if (!$user->isLogin()) {
             throw $this->createAccessDeniedException();
         }
 
-        $course = $this->getCourseService()->getCourse($id);
+        $remainingStudentNum = $this->getRemainStudentNum($course);
 
-        $data = array('courseId' => $course['id'], 'payment' => 'alipay');
-        $form = $this->createNamedFormBuilder('course_order', $data)
-            ->add('courseId', 'hidden')
-            ->add('payment', 'hidden')
-            ->getForm();
+        $previewAs = $request->query->get('previewAs');
+
+        $member = $user ? $this->getCourseService()->getCourseMember($course['id'], $user['id']) : null;
+        $member = $this->previewAsMember($previewAs, $member, $course);
+
+        $courseSetting = $this->getSettingService()->get('course', array());
+
+        $userInfo = $this->getUserService()->getUserProfile($user['id']);
+        $userInfo['approvalStatus'] = $user['approvalStatus'];
+
+        $course = $this->getCourseService()->getCourse($id);
+       
+        $userFields=$this->getUserFieldService()->getAllFieldsOrderBySeqAndEnabled();
+
+        for($i=0;$i<count($userFields);$i++){
+           if(strstr($userFields[$i]['fieldName'], "textField")) $userFields[$i]['type']="text";
+           if(strstr($userFields[$i]['fieldName'], "varcharField")) $userFields[$i]['type']="varchar";
+           if(strstr($userFields[$i]['fieldName'], "intField")) $userFields[$i]['type']="int";
+           if(strstr($userFields[$i]['fieldName'], "floatField")) $userFields[$i]['type']="float";
+           if(strstr($userFields[$i]['fieldName'], "dateField")) $userFields[$i]['type']="date";
+        }
+
+        if ($remainingStudentNum == 0 && $course['type'] == 'live') {
+            return $this->render('TopxiaWebBundle:CourseOrder:remainless-modal.html.twig', array(
+                'course' => $course
+            ));
+        }
+
+        $oldOrders = $this->getOrderService()->searchOrders(array(
+                'targetType' => 'course',
+                'targetId' => $course['id'],
+                'userId' => $user['id'],
+                'status' => 'created',
+                'createdTimeGreaterThan' => strtotime('-40 hours'),
+            ), array('createdTime', 'DESC'), 0, 1
+        );
+
+        $order = current($oldOrders);
+
+        if($course['price'] > 0 && $order && ($course['price'] == ($order['amount'] + $order['couponDiscount'])) ) {
+             return $this->render('TopxiaWebBundle:CourseOrder:repay.html.twig', array(
+                'order' => $order,
+            ));
+        }
 
         return $this->render('TopxiaWebBundle:CourseOrder:buy-modal.html.twig', array(
             'course' => $course,
             'payments' => $this->getEnabledPayments(),
-            'form' => $form->createView()
+            'user' => $userInfo,
+            'avatarAlert' => AvatarAlert::alertJoinCourse($user),
+            'courseSetting' => $courseSetting,
+            'member' => $member,
+            'userFields'=>$userFields,
+        ));
+    }
+
+    public function repayAction(Request $request)
+    {
+        $order = $this->getOrderService()->getOrder($request->request->get('orderId'));
+        if (empty($order)) {
+            return $this->createMessageResponse('error', '订单不存在!');
+        }
+
+        if ( (time() - $order['createdTime']) > 40 * 3600 ) {
+            return $this->createMessageResponse('error', '订单已过期，不能支付，请重新创建订单。');
+        }
+
+        if ($order['targetType'] != 'course') {
+            return $this->createMessageResponse('error', '此类订单不能支付，请重新创建订单!');
+        }
+
+        $course = $this->getCourseService()->getCourse($order['targetId']);
+        if (empty($course)) {
+            return $this->createMessageResponse('error', '购买的课程不存在，请重新创建订单!');
+        }
+
+        if ($course['price'] != ($order['amount'] + $order['couponDiscount'])) {
+            return $this->createMessageResponse('error', '订单价格已变更，请重新创建订单!');
+        }
+
+
+        $payRequestParams = array(
+            'returnUrl' => $this->generateUrl('course_order_pay_return', array('name' => $order['payment']), true),
+            'notifyUrl' => $this->generateUrl('course_order_pay_notify', array('name' => $order['payment']), true),
+            'showUrl' => $this->generateUrl('course_show', array('id' => $order['targetId']), true),
+        );
+
+        return $this->forward('TopxiaWebBundle:Order:submitPayRequest', array(
+            'order' => $order,
+            'requestParams' => $payRequestParams,
         ));
     }
 
     public function payAction(Request $request)
     {
-        $order = $this->getOrderService()->createOrder($request->request->all());
+        $formData = $request->request->all();
+        $user = $this->getCurrentUser();
+        if (empty($user)) {
+            return $this->createMessageResponse('error', '用户未登录，创建课程订单失败。');
+        }
 
-        if (intval($order['price']*100) > 0) {
-            $paymentRequest = $this->createPaymentRequest($order);
+        $userInfo = ArrayToolkit::parts($formData, array(
+            'truename',
+            'mobile',
+            'qq',
+            'company',
+            'weixin',
+            'weibo',
+            'idcard',
+            'gender',
+            'job',
+            'intField1','intField2','intField3','intField4','intField5',
+            'floatField1','floatField2','floatField3','floatField4','floatField5',
+            'dateField1','dateField2','dateField3','dateField4','dateField5',
+            'varcharField1','varcharField2','varcharField3','varcharField4','varcharField5','varcharField10','varcharField6','varcharField7','varcharField8','varcharField9',
+            'textField1','textField2','textField3','textField4','textField5', 'textField6','textField7','textField8','textField9','textField10',
+        ));
+        $userInfo = $this->getUserService()->updateUserProfile($user['id'], $userInfo);
 
-            return $this->render('TopxiaWebBundle:CourseOrder:pay.html.twig', array(
-                'form' => $paymentRequest->form(),
-                'order' => $order,
-            ));
+        $order = $this->getCourseOrderService()->createOrder($formData);
+
+        if ($order['status'] == 'paid') {
+            return $this->redirect($this->generateUrl('course_show', array('id' => $order['targetId'])));
         } else {
-            $this->getOrderService()->payOrder(array(
-                'sn' => $order['sn'],
-                'status' => 'success', 
-                'amount' => $order['price'], 
-                'paidTime' => time()
-            ));
+            $payRequestParams = array(
+                'returnUrl' => $this->generateUrl('course_order_pay_return', array('name' => $order['payment']), true),
+                'notifyUrl' => $this->generateUrl('course_order_pay_notify', array('name' => $order['payment']), true),
+                'showUrl' => $this->generateUrl('course_show', array('id' => $order['targetId']), true),
+            );
 
-            return $this->redirect($this->generateUrl('course_show', array('id' => $order['courseId'])));
+            return $this->forward('TopxiaWebBundle:Order:submitPayRequest', array(
+                'order' => $order,
+                'requestParams' => $payRequestParams,
+            ));
         }
     }
 
     public function payReturnAction(Request $request, $name)
     {
-        $this->getLogService()->info('order', 'pay_result',  "{$name}页面跳转支付通知", $request->query->all());
-        $response = $this->createPaymentResponse($name, $request->query->all());
+        $controller = $this;
+        return $this->doPayReturn($request, $name, function($success, $order) use(&$controller) {
+            if (!$success) {
+                $controller->generateUrl('course_show', array('id' => $order['targetId']));
+            }
 
-        $payData = $response->getPayData();
-        $order = $this->getOrderService()->payOrder($payData);
+            $controller->getCourseOrderService()->doSuccessPayOrder($order['id']);
 
-        return $this->redirect($this->generateUrl('course_show', array('id' => $order['courseId'])));
+            return $controller->generateUrl('course_show', array('id' => $order['targetId']));
+        });
     }
 
     public function payNotifyAction(Request $request, $name)
     {
-        $this->getLogService()->info('order', 'pay_result', "{$name}服务器端支付通知", $request->request->all());
-        $response = $this->createPaymentResponse($name, $request->request->all());
+        $controller = $this;
+        return $this->doPayNotify($request, $name, function($success, $order) use(&$controller) {
+            if (!$success) {
+                return ;
+            }
 
-        $payData = $response->getPayData();
-        try {
-            $order = $this->getOrderService()->payOrder($payData);
-            return new Response('success');
-        } catch (\Exception $e) {
-            throw $e;
-        }
+            $controller->getCourseOrderService()->doSuccessPayOrder($order['id']);
+
+            return ;
+        });
     }
 
     public function refundAction(Request $request , $id)
     {
-        $course = $this->getCourseService()->tryTakeCourse($id);
+        list($course, $member) = $this->getCourseService()->tryTakeCourse($id);
         $user = $this->getCurrentUser();
-
-        $member = $this->getCourseService()->getCourseMember($course['id'], $user['id']);
 
         if (empty($member) or empty($member['orderId'])) {
             throw $this->createAccessDeniedException('您不是课程的学员或尚未购买该课程，不能退学。');
         }
-
 
         $order = $this->getOrderService()->getOrder($member['orderId']);
         if (empty($order)) {
             throw $this->createNotFoundException();
         }
 
-
-        $maxRefundDays = (int) $this->setting('refund.maxRefundDays', 0);
-        $refundOverdue = (time() - $order['createdTime']) > ($maxRefundDays * 86400);
-
         if ('POST' == $request->getMethod()) {
             $data = $request->request->all();
             $reason = empty($data['reason']) ? array() : $data['reason'];
             $amount = empty($data['applyRefund']) ? 0 : null;
 
-            $refund = $this->getOrderService()->applyRefundOrder($member['orderId'], $amount, $reason);
-            if ($refund['status'] == 'created') {
-                $message = $this->setting('refund.applyNotification', '');
-                if ($message) {
-                    $courseUrl = $this->generateUrl('course_show', array('id' => $course['id']));
-                    $variables = array(
-                        'course' => "<a href='{$courseUrl}'>{$course['title']}</a>"
-                    );
-                    $message = StringToolkit::template($message, $variables);
-                    $this->getNotificationService()->notify($refund['userId'], 'default', $message);
-                }
-            }
+            $refund = $this->getCourseOrderService()->applyRefundOrder($member['orderId'], $amount, $reason, $this->container);
 
             return $this->createJsonResponse($refund);
         }
+
+        $maxRefundDays = (int) $this->setting('refund.maxRefundDays', 0);
+        $refundOverdue = (time() - $order['createdTime']) > ($maxRefundDays * 86400);
 
         return $this->render('TopxiaWebBundle:CourseOrder:refund-modal.html.twig', array(
             'course' => $course,
@@ -147,74 +241,86 @@ class CourseOrderController extends BaseController
             throw $this->createAccessDeniedException('您不是课程的学员或尚未购买该课程，不能取消退款。');
         }
 
-        $this->getOrderService()->cancelRefundOrder($member['orderId']);
+        $this->getCourseOrderService()->cancelRefundOrder($member['orderId']);
 
         return $this->createJsonResponse(true);
 
     }
 
-    private function createPaymentRequest($order)
+    private function previewAsMember($as, $member, $course)
     {
-
-        $options = $this->getPaymentOptions($order['payment']);
-        $request = Payment::createRequest($order['payment'], $options);
-
-        return $request->setParams(array(
-            'orderSn' => $order['sn'],
-            'title' => $order['title'],
-            'summary' => '',
-            'amount' => $order['price'],
-            'returnUrl' => $this->generateUrl('course_order_pay_return', array('name' => $order['payment']), true),
-            'notifyUrl' => $this->generateUrl('course_order_pay_notify', array('name' => $order['payment']), true),
-            'showUrl' => $this->generateUrl('course_show', array('id' => $order['courseId']), true),
-        ));
-    }
-
-    private function createPaymentResponse($name, $params)
-    {
-        $options = $this->getPaymentOptions($name);
-        $response = Payment::createResponse($name, $options);
-
-        return $response->setParams($params);
-    }
-
-    private function getPaymentOptions($payment)
-    {
-        $settings = $this->setting('payment');
-
-        if (empty($settings)) {
-            throw new \RuntimeException('支付参数尚未配置，请先配置。');
+        $user = $this->getCurrentUser();
+        if (empty($user->id)) {
+            return null;
         }
 
-        if (empty($settings['enabled'])) {
-            throw new \RuntimeException("支付模块未开启，请先开启。");
+
+        if (in_array($as, array('member', 'guest'))) {
+            if ($this->get('security.context')->isGranted('ROLE_ADMIN')) {
+                $member = array(
+                    'id' => 0,
+                    'courseId' => $course['id'],
+                    'userId' => $user['id'],
+                    'levelId' => 0,
+                    'learnedNum' => 0,
+                    'isLearned' => 0,
+                    'seq' => 0,
+                    'isVisible' => 0,
+                    'role' => 'teacher',
+                    'locked' => 0,
+                    'createdTime' => time(),
+                    'deadline' => 0
+                );
+            }
+
+            if (empty($member) or $member['role'] != 'teacher') {
+                return $member;
+            }
+
+            if ($as == 'member') {
+                $member['role'] = 'student';
+            } else {
+                $member = null;
+            }
         }
 
-        if (empty($settings[$payment. '_enabled'])) {
-            throw new \RuntimeException("支付模块({$payment})未开启，请先开启。");
-        }
-
-        if (empty($settings["{$payment}_key"]) or empty($settings["{$payment}_secret"])) {
-            throw new \RuntimeException("支付模块({$payment})参数未设置，请先设置。");
-        }
-
-        $options = array(
-            'key' => $settings["{$payment}_key"],
-            'secret' => $settings["{$payment}_secret"],
-            'type' => $settings["{$payment}_type"]
-        );
-
-        return $options;
+        return $member;
     }
 
-    private function getOrderService()
+    private function getRemainStudentNum($course)
     {
-        return $this->getServiceKernel()->createService('Course.OrderService');
+        $remainingStudentNum = $course['maxStudentNum'];
+
+        if ($course['type'] == 'live') {
+            if ($course['price'] <= 0) {
+                $remainingStudentNum = $course['maxStudentNum'] - $course['studentNum'];
+            } else {
+                $createdOrdersCount = $this->getOrderService()->searchOrderCount(array(
+                    'targetType' => 'course',
+                    'targetId' => $course['id'],
+                    'status' => 'created',
+                    'createdTimeGreaterThan' => strtotime("-30 minutes")
+                ));
+                $remainingStudentNum = $course['maxStudentNum'] - $course['studentNum'] - $createdOrdersCount;
+            }
+        }
+
+        return $remainingStudentNum;
     }
 
-    private function getCourseService()
+    public function getCourseService()
     {
         return $this->getServiceKernel()->createService('Course.CourseService');
+    }
+
+    public function getCourseOrderService()
+    {
+        return $this->getServiceKernel()->createService('Course.CourseOrderService');
+    }
+
+    protected function getSettingService()
+    {
+        return $this->getServiceKernel()->createService('System.SettingService');
     }
 
     private function getNotificationService()
@@ -232,7 +338,6 @@ class CourseOrderController extends BaseController
             return $enableds;
         }
 
-
         $payNames = array('alipay');
         foreach ($payNames as $payName) {
             if (!empty($setting[$payName . '_enabled'])) {
@@ -244,5 +349,12 @@ class CourseOrderController extends BaseController
 
         return $enableds;
     }
-
+    protected function getUserFieldService()
+    {
+        return $this->getServiceKernel()->createService('User.UserFieldService');
+    }
+    protected function getOrderService()
+    {
+        return $this->getServiceKernel()->createService('Order.OrderService');
+    }
 }

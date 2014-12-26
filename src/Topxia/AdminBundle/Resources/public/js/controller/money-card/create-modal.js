@@ -5,30 +5,29 @@ define(function(require, exports, module) {
     require("jquery.bootstrap-datetimepicker");
     var Notify = require('common/bootstrap-notify');
 
-	exports.run = function() {
+    exports.run = function() {
 
         var $modal = $('#money-card-create-form').parents('.modal');
-
 
         var validator = new Validator({
             element: '#money-card-create-form',
             autoSubmit: false,
             onFormValidated: function(error, results, $form) {
-            	if (error) {
-            		return false;
-            	}
+                if (error) {
+                    return false;
+                }
 
                 var btn = $("#batch-create");
                 btn.button('loading');
                 btn.addClass('disabled');
 
-				$.post($form.attr('action'), $form.serialize(), function(html) {
-					$modal.modal('hide');
-					Notify.success('生成成功');
+                $.post($form.attr('action'), $form.serialize(), function(html) {
+                    $modal.modal('hide');
+                    Notify.success('生成成功');
                     window.location.reload();
-				}).error(function(){
-					Notify.danger('卡号生成失败，请重新生成！');
-				});
+                }).error(function(){
+                    Notify.danger('卡号生成失败，请重新生成！');
+                });
             }
         });
 
@@ -43,7 +42,7 @@ define(function(require, exports, module) {
             rule: 'integer'
         })
         .addItem({
-            element: '[name="passwordMedian"]',
+            element: '[name="passwordLength"]',
             required: true,
             rule: 'integer'
         })
@@ -60,10 +59,10 @@ define(function(require, exports, module) {
 
         $("#deadlineCreate").datetimepicker({
             language: 'zh-CN',
-            autoclose: true,
+            // autoclose: true,
             format: 'yyyy-mm-dd',
             minView: 'month'
         });
-	};
+    };
 
 });

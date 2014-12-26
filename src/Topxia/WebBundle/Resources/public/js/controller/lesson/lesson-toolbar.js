@@ -38,13 +38,13 @@ define(function(require, exports, module) {
 			var QuestionPlugin = require('./plugins/question/plugin');
 			var NotePlugin = require('./plugins/note/plugin');
 			var MaterialPlugin = require('./plugins/material/plugin');
-			var QuizPlugin = require('./plugins/quiz/plugin');
+			var HomeworkPlugin = require('./plugins/homework/plugin');
 
 			toolbar.registerPlugin(new LessonPlugin(toolbar));
 			toolbar.registerPlugin(new QuestionPlugin(toolbar));
 			toolbar.registerPlugin(new NotePlugin(toolbar));
 			toolbar.registerPlugin(new MaterialPlugin(toolbar));
-			toolbar.registerPlugin(new QuizPlugin(toolbar));
+			toolbar.registerPlugin(new HomeworkPlugin(toolbar));
 
 			var activePlugins = this.get('activePlugins');
 
@@ -62,6 +62,10 @@ define(function(require, exports, module) {
 
 			$('#lesson-toolbar-primary').on('click', 'li[data-plugin]', function(e){
 				e.preventDefault();
+				if ($(this).hasClass('active')) {
+					toolbar.hidePane();
+					return ;
+				}
 				$(e.delegateTarget).find('li[data-plugin]').removeClass('active');
 
 				

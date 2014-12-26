@@ -1,7 +1,5 @@
 {% extends 'TopxiaWebBundle::bootstrap-modal-layout.html.twig' %}
 
-{% set modal_size = 'small' %}
-
 {% block title %}登录{{ setting('site.name') }}{% endblock %}
 
 {% block body %}
@@ -12,7 +10,7 @@
 
   <div class="form-group">
     <div class="controls">
-      <input class="form-control" type="text" name="_username" placeholder="Email地址" data-display="Email地址" />
+      <input class="form-control" type="text" name="_username" placeholder="Email地址 / 用户昵称" data-display="Email地址 / 用户昵称" />
     </div>
   </div>
 
@@ -43,6 +41,9 @@
   <a href="{{ path('password_reset') }}">找回密码</a>
   <span class="text-muted mhs">|</span>
   <span class="text-muted">还没有注册帐号？</span>
-  <a href="{{ path('register') }}">立即注册</a>
+  <a href="{{ path('register', {goto:_target_path}) }}">立即注册</a>
 </div>
+
+ {% include 'TopxiaWebBundle:Login:social-logins-block.html.twig' %}
+ 
 {% endblock %}

@@ -36,6 +36,16 @@ class ThreadServiceImpl extends BaseService implements ThreadService
 		return $this->getThreadDao()->findThreadsByCourseIdAndType($courseId, $type, $orderBy, $start, $limit);
 	}
 
+	public function findLatestThreadsByType($type, $start, $limit)
+	{
+		return $this->getThreadDao()->findLatestThreadsByType($type, $start, $limit);
+	}
+
+	public function findEliteThreadsByType($type, $status, $start, $limit)
+	{
+		return $this->getThreadDao()->findEliteThreadsByType($type, $status, $start, $limit);
+	}
+
 	public function searchThreads($conditions, $sort, $start, $limit)
 	{
 		
@@ -89,6 +99,12 @@ class ThreadServiceImpl extends BaseService implements ThreadService
 					array('latestPostTime', 'DESC'),
 				);
 				break;
+			case 'popular':
+				$orderBys = array(
+					array('hitNum', 'DESC'),
+				);
+				break;
+
 			default:
 				throw $this->createServiceException('参数sort不正确。');
 		}
@@ -137,7 +153,7 @@ class ThreadServiceImpl extends BaseService implements ThreadService
 			throw $this->createServiceException(sprintf('Thread type(%s) is error.', $thread['type']));
 		}
 
-		$course = $this->getCourseService()->tryTakeCourse($thread['courseId']);
+		list($course, $member) = $this->getCourseService()->tryTakeCourse($thread['courseId']);
 
 		$thread['userId'] = $this->getCurrentUser()->id;
 		$thread['title'] = empty($thread['title']) ? '' : $thread['title'];
@@ -270,6 +286,8 @@ class ThreadServiceImpl extends BaseService implements ThreadService
 		}
 		if ($sort == 'best') {
 			$orderBy = array('score', 'DESC');
+		} else if($sort == 'elite') {
+			$orderBy = array('createdTime', 'DESC', ',isElite', 'ASC');
 		} else {
 			$orderBy = array('createdTime', 'ASC');
 		}
@@ -308,7 +326,7 @@ class ThreadServiceImpl extends BaseService implements ThreadService
 			throw $this->createServiceException(sprintf('课程(ID: %s)话题(ID: %s)不存在。', $post['courseId'], $post['threadId']));
 		}
 
-		$course = $this->getCourseService()->tryTakeCourse($post['courseId']);
+		list($course, $member) = $this->getCourseService()->tryTakeCourse($post['courseId']);
 
 		$post['userId'] = $this->getCurrentUser()->id;
 		$post['isElite'] = $this->getCourseService()->isCourseTeacher($post['courseId'], $post['userId']) ? 1 : 0;
@@ -325,18 +343,6 @@ class ThreadServiceImpl extends BaseService implements ThreadService
 			'latestPostTime' => $post['createdTime'],
 		);
 		$this->getThreadDao()->updateThread($thread['id'], $threadFields);
-
-		if ($thread['userId'] != $post['userId']) {
-			$this->getNotifiactionService()->notify($thread['userId'], 'thread-post', array(
-				'postId' => $post['id'],
-				'postUserId' => $post['userId'],
-				'postUserNickname' => $this->getCurrentUser()->nickname,
-				'threadId' => $thread['id'],
-				'threadTitle' => $thread['title'],
-				'threadType' => $thread['type'],
-				'courseId' => $thread['courseId']
-			));
-		}
 
 		return $post;
 	}

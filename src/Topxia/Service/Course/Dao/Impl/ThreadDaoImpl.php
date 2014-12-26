@@ -16,6 +16,18 @@ class ThreadDaoImpl extends BaseDao implements ThreadDao
         return $this->getConnection()->fetchAssoc($sql, array($id)) ? : null;
 	}
 
+	public function findLatestThreadsByType($type, $start, $limit)
+	{
+        $sql = "SELECT * FROM {$this->table} WHERE type = ? ORDER BY createdTime DESC";
+        return $this->getConnection()->fetchAll($sql, array($type)) ? : array();
+	}
+
+	public function findEliteThreadsByType($type, $status, $start, $limit)
+	{
+		$sql = "SELECT * FROM {$this->table} WHERE type = ? AND isElite = ? ORDER BY createdTime DESC LIMIT {$start}, {$limit}";
+        return $this->getConnection()->fetchAll($sql, array($type, $status)) ? : array();
+	}
+
     public function findThreadsByUserIdAndType($userId, $type)
     {
         $sql = "SELECT * FROM {$this->table} WHERE userId = ? AND type = ? ORDER BY createdTime DESC";

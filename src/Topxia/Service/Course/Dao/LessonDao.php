@@ -7,17 +7,29 @@ interface LessonDao
 
     public function getLesson($id);
 
+    public function getLessonByCourseIdAndNumber($courseId, $number);
+
     public function findLessonsByCourseId($courseId);
 
+    public function findLessonsByTypeAndMediaId($type, $mediaId);
+
+    public function findMinStartTimeByCourseId($courseId);
+
     public function findLessonIdsByCourseId($courseId);
+
+    public function searchLessons($condition, $orderBy, $start, $limit);
+
+    public function searchLessonCount($conditions);
 
     public function getLessonCountByCourseId($courseId);
 
     public function getLessonMaxSeqByCourseId($courseId);
 
-    public function findLessonsByChapterId($chapterId);
+    public function findTimeSlotOccupiedLessonsByCourseId($courseId,$startTime,$endTime,$excludeLessonId=0);
 
-    public function getLessonByMediaId($mediaId);
+    public function findTimeSlotOccupiedLessons($startTime,$endTime,$excludeLessonId=0);
+
+    public function findLessonsByChapterId($chapterId);
 
     public function addLesson($course);
 
@@ -28,4 +40,10 @@ interface LessonDao
     public function deleteLessonsByCourseId($courseId);
 
     public function findLessonsByIds(array $ids);
+
+    public function sumLessonGiveCreditByCourseId($courseId);
+
+    public function sumLessonGiveCreditByLessonIds(array $lesonIds);
+
+    public function analysisLessonDataByTime($startTime,$endTime);   
 }

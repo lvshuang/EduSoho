@@ -2,13 +2,14 @@
 <tr id="course-tr-{{ course.id }}">
   <td>{{ course.id }}</td>
   <td>
-    <a href="{{ path('course_show', {id:course.id}) }}" target="_blank"><strong>{{ course.title }}</strong></a>
+    <a href="{{ path('course_show', {id:course.id}) }}" target="_blank"><strong>{{ course.title }}</strong></a>{% if course.type == 'live' %}<span class="label label-success live-label mls">直播</span>{% endif %}
     <br>
     <span class="text-muted text-sm">分类：{{ category.name|default('--') }}</span>
     {% if course.recommended %}
-      <span class="label label-default">荐:{{ course.recommendedTime|date('Y-m-d') }}</span>
+      <span class="label label-default">荐:{{ course.recommendedTime|date('Y-m-d') }} / 序号:{{ course.recommendedSeq }}</span>
     {% endif %}
   </td>
+  <td>{% if  course.serializeMode =="none" %}<span class="text-info">非连载课程</span>{% elseif course.serializeMode =="serialize" %}<span class="text-success">连载中</span>{% elseif course.serializeMode =="finished" %}<span class="text-danger">已完结</span>{% endif %}</td>
   <td>{{ course.studentNum }}</td>
   <td><span class="money-text">{{ course.income }}</span></td>
   <td>{{ dict_text('courseStatus:html', course.status) }}</td>
@@ -26,7 +27,7 @@
       </a>
       <ul class="dropdown-menu pull-right">
 
-        <li><a class="recommend-course" href="javascript:" data-url="{{ path('admin_course_recommend', {id:course.id}) }}"><span class="glyphicon glyphicon-hand-up"></span> 推荐课程</a></li>
+        <li><a class="recommend-course" href="#modal" data-toggle="modal" data-url="{{ path('admin_course_recommend', {id:course.id, ref:'courseList'}) }}"><span class="glyphicon glyphicon-hand-up"></span> 推荐课程</a></li>
 
         {% if course.recommended %}
           <li><a class="cancel-recommend-course" href="javascript:" data-url="{{ path('admin_course_cancel_recommend', {id:course.id}) }}"><span class="glyphicon glyphicon-hand-right"></span> 取消推荐</a></li>

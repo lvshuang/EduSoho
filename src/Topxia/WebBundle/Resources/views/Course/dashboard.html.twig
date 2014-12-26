@@ -11,7 +11,13 @@
 			<li class="mvl tac text-muted">课程暂无课时内容</li>
 		</ul>
 	{% else %}
-		{% include 'TopxiaWebBundle:CourseLesson:item-list.html.twig' %}
+		{% include 'TopxiaWebBundle:CourseLesson:item-list.html.twig' with {files: files, show: true} %}
 	{% endif %}
 
+{% endblock %}
+
+{% block dashboard_relatedCoursesBlock %}
+      {% if setting('course.relatedCourses') == 1 %}
+        {{ render(controller('TopxiaWebBundle:Course:relatedCoursesBlock',{course:course})) }}
+      {% endif %}
 {% endblock %}

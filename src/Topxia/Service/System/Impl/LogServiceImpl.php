@@ -29,8 +29,11 @@ class LogServiceImpl extends BaseService implements  LogService
 
 		switch ($sort) {
 			case 'created':
-				$sort = 'createdTime';
+				$sort = array('createdTime','DESC');
 				break;
+			case 'createdByAsc':
+				$sort = array('createdTime','ASC');
+				break;				
 			
 			default:
 				throw $this->createServiceException('参数sort不正确。');
@@ -86,7 +89,7 @@ class LogServiceImpl extends BaseService implements  LogService
             unset($conditions['nickname']);
         }
 
-        if ($conditions['startDateTime'] && $conditions['endDateTime']) {
+        if (!empty($conditions['startDateTime']) && !empty($conditions['endDateTime'])) {
 			$conditions['startDateTime'] = strtotime($conditions['startDateTime']);
 			$conditions['endDateTime'] = strtotime($conditions['endDateTime']); 
         } else {
@@ -94,12 +97,22 @@ class LogServiceImpl extends BaseService implements  LogService
         	unset($conditions['endDateTime']);
         }
 
-        if (in_array($conditions['level'], array('info', 'warning', 'error'))) {
+        if (!empty($conditions['level']) && in_array($conditions['level'], array('info', 'warning', 'error'))) {
         	$conditions['level'] = $conditions['level'];
         } else {
         	unset($conditions['level']);
         }
 
 		return $conditions;
+	}
+
+	public function analysisLoginNumByTime($startTime,$endTime)
+	{
+		return $this->getLogDao()->analysisLoginNumByTime($startTime,$endTime);
+	}
+
+	public function analysisLoginDataByTime($startTime,$endTime)
+	{
+		return $this->getLogDao()->analysisLoginDataByTime($startTime,$endTime);
 	}
 }

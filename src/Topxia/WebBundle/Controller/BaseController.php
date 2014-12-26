@@ -75,11 +75,21 @@ abstract class BaseController extends Controller
         $currentUser = new CurrentUser();
         $currentUser->fromArray($user);
 
+        ServiceKernel::instance()->setCurrentUser($currentUser);
+
         $token = new UsernamePasswordToken($currentUser, null, 'main', $currentUser['roles']);
         $this->container->get('security.context')->setToken($token);
 
         $loginEvent = new InteractiveLoginEvent($this->getRequest(), $token);
         $this->get('event_dispatcher')->dispatch(SecurityEvents::INTERACTIVE_LOGIN, $loginEvent);
+
+        $loginBind = $this->setting('login_bind', array());
+        if (empty($loginBind['login_limit'])) {
+            return ;
+        }
+
+        $sessionId = $this->container->get('request')->getSession()->getId();
+        $this->getUserService()->rememberLoginSessionId($user['id'], $sessionId);
     }
 
 
@@ -91,6 +101,11 @@ abstract class BaseController extends Controller
     protected function setting($name, $default = null)
     {
         return $this->get('topxia.twig.web_extension')->getSetting($name, $default);
+    }
+
+    protected function isPluginInstalled($name)
+    {
+        return $this->get('topxia.twig.web_extension')->isPluginInstaled($name);
     }
 
     protected function createNamedFormBuilder($name, $data = null, array $options = array())

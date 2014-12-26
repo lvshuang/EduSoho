@@ -13,12 +13,16 @@
   <meta name="description" content="{% block description %}{% endblock %}" />
   <meta content="{{ csrf_token('site') }}" name="csrf-token" />
   {{ setting('login_bind.verify_code', '')|raw }}
+  {% if setting('site.favicon') %}
+  <link href="{{ asset(setting('site.favicon')) }}" rel="shortcut icon" />
+  {% endif %}
   {% block stylesheets %}
-    <link href="{{ asset('assets/libs/gallery2/bootstrap/3.0.1/css/bootstrap.css') }}" rel="stylesheet" />
+    <link href="{{ asset('assets/libs/gallery2/bootstrap/3.1.1/css/bootstrap.css') }}" rel="stylesheet" />
     <link rel="stylesheet" media="screen" href="{{ asset('assets/css/common.css') }}" />
     <link rel="stylesheet" media="screen" href="{{ asset('assets/css/bootstrap-extends.css') }}" />
     <link rel="stylesheet" media="screen" href="{{ asset('bundles/topxiaweb/css/web.css') }}" />
     <link rel="stylesheet" media="screen" href="{{ asset('themes/autumn/css/autumn.css') }}" />
+    <link rel="stylesheet" media="screen" href="{{ asset('bundles/topxiaweb/css/member.css') }}" />
     <!--[if lt IE 8]>
       <link href="{{ asset('assets/css/oldie.css') }}" rel="stylesheet">
     <![endif]-->
@@ -53,11 +57,17 @@
           {% endif %}
         </div>
         <div class="navbar-collapse collapse">
-          {{ render(controller('TopxiaWebBundle:Default:topNavigation')) }}
-          <ul class="nav navbar-nav navbar-right">
-            <li><a href="{{ path('search') }}"><span class="glyphicon glyphicon-search"></span> 搜索</a></li>          
+          {{ render(controller('TopxiaWebBundle:Default:topNavigation', {siteNav:siteNav|default(null)})) }}
+          <ul class="nav navbar-nav navbar-right">      
             {% if app.user %}
               <li><a href="{{ path('my') }}"> 我的课程 </a></li>
+              {% if setting('mobile.enabled') %}
+                <li><a href="{{ path('mobile') }}" class="mobile-badge-container">
+                  <span class="glyphicon glyphicon-phone"></span>
+                  <span class="badge">v2</span>
+                </a></li>
+              {% endif %}
+              <li><a href="{{ path('search') }}"><span class="glyphicon glyphicon-search"></span></a></li>
               <li><a href="{{ path('notification') }}" class="badge-container notification-badge-container">
                 <span class="glyphicon glyphicon-bullhorn hidden-lt-ie8"></span>
                 <span class="visible-lt-ie8">通知</span>
@@ -71,12 +81,12 @@
                 </li>
               <li class="visible-lt-ie8"><a href="{{ path('settings') }}">{{ app.user.nickname }}</a></li>
               <li class="dropdown hidden-lt-ie8">
-                <a href="#" class="dropdown-toggle" data-toggle="dropdown">{{ app.user.nickname }} <b class="caret"></b></a>
+                <a href="javascript:;" class="dropdown-toggle" data-toggle="dropdown">{{ app.user.nickname }} <b class="caret"></b></a>
                 <ul class="dropdown-menu">
                   <li><a href="{{ path('user_show', {id:app.user.id}) }}"><i class="glyphicon glyphicon-home"></i> 我的主页</a></li>
                   <li><a href="{{ path('settings') }}"><i class="glyphicon glyphicon-cog"></i> 帐号设置</a></li>
                   <li class="divider"></li>
-                  {% if is_granted('ROLE_ADMIN') %}
+                  {% if is_granted('ROLE_BACKEND') %}
                     <li><a href="{{ path('admin') }}"><i class="glyphicon glyphicon-dashboard"></i> 管理后台</a></li>
                     <li class="divider"></li>
                   {% endif %}
@@ -84,8 +94,12 @@
                 </ul>
               </li>
             {% else %}
-              <li><a href="{{ path('login') }}">登录</a></li>
-              <li><a href="{{ path('register') }}">注册</a></li>
+              {% if setting('mobile.enabled') %}
+                <li><a href="{{ path('mobile') }}"><span class="glyphicon glyphicon-phone"></span> 手机版</a></li>
+              {% endif %}
+              <li><a href="{{ path('search') }}"><span class="glyphicon glyphicon-search"></span> 搜索</a></li>
+              <li><a href="{{ path('login', {goto:_target_path|default(app.request.server.get('REQUEST_URI'))}) }}">登录</a></li>
+              <li><a href="{{ path('register', {goto:_target_path|default(app.request.server.get('REQUEST_URI'))}) }}">注册</a></li>
             {% endif %}
           </ul>
         </div><!--/.navbar-collapse -->
@@ -112,16 +126,17 @@
 
       <div class="footer-links">
         {{ render(controller('TopxiaWebBundle:Default:footNavigation')) }}
-        {% if setting('site.icp') %} <a href="http://www.miibeian.gov.cn/" target="_blank">{{ setting('site.icp') }}</a> {% endif %}
       </div>
 
       <div class="footer-copyright">
-        Powered by <a href="http://www.edusoho.com/" target="_blank"> Edusoho v{{ constant('\\Topxia\\System::VERSION') }}</a> ©2013 <a href="http://www.edusoho.com" target="_blank">edusoho.com</a> & <a href="http://www.howzhi.com/" target="_blank"> 好知网</a>
+        {% include "TopxiaWebBundle::powered-by.html.twig" %}
+        {{ setting('site.analytics')|raw }} 
+        <a class="mlm" href="{{ path('course_archive') }}">课程存档</a>
+        <div class="mts">{% if setting('site.copyright') %}课程内容版权均归<a href="/">{{ setting('site.copyright') }}</a>所有{% endif %}&nbsp;{% if setting('site.icp') %}<a href="http://www.miibeian.gov.cn/" target="_blank">{{ setting('site.icp') }}</a>{% endif %}</div>
       </div>
 
     </div>
   </div>
-
 
   {% block bottom %}{% endblock %}
 
@@ -130,7 +145,5 @@
 {% endblock %}
 
 {% include 'TopxiaWebBundle::script_boot.html.twig' with {script_main: asset('bundles/topxiaweb/js/app.js')} %}
-
-{{ setting('site.analytics')|raw }}
 </body>
 </html>

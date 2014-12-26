@@ -13,6 +13,9 @@ class CourseReviewController extends BaseController
     {
         $course = $this->getCourseService()->getCourse($id);
 
+        $previewAs = $request->query->get('previewAs');
+        $isModal = $request->query->get('isModal');
+
         $paginator = new Paginator(
             $this->get('request'),
             $this->getReviewService()->getCourseReviewCount($id)
@@ -31,14 +34,15 @@ class CourseReviewController extends BaseController
             'course' => $course,
             'reviews' => $reviews,
             'users' => $users,
-            'paginator' => $paginator,
+            'isModal' => $isModal,
+            'paginator' => $paginator
         ));
     }
 
     public function createAction(Request $request, $id)
     {
         $currentUser = $this->getCurrentUser();
-        $course = $this->getCourseService()->getCourse($id);
+        list($course, $member) = $this->getCourseService()->tryTakeCourse($id);
         $review = $this->getReviewService()->getUserCourseReview($currentUser['id'], $course['id']);
         $form = $this->createForm(new ReviewType(), $review ? : array());
 

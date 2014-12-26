@@ -2,40 +2,92 @@
 namespace Topxia\WebBundle\Controller;
 
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Topxia\WebBundle\Form\RegisterType;
+use Gregwar\Captcha\CaptchaBuilder;
 
 class RegisterController extends BaseController
 {
 
     public function indexAction(Request $request)
     {
-        $form = $this->createForm(new RegisterType());
-        if ($request->getMethod() == 'POST') {
-            $form->bind($request);
-
-            if ($form->isValid()) {
-                $registration = $form->getData();
-                $registration['createdIp'] = $request->getClientIp();
-
-                $user = $this->getAuthService()->register($registration);
-                $this->authenticateUser($user);
-                $this->sendRegisterMessage($user);
-
-                $goto = $this->generateUrl('register_submited', array(
-                    'id' => $user['id'], 'hash' => $this->makeHash($user)
-                ));
-
-                if ($this->getAuthService()->hasPartnerAuth()) {
-                    return $this->redirect($this->generateUrl('partner_login', array('goto' => $goto)));
-                }
-
-                return $this->redirect($goto);
-            }
+        $user = $this->getCurrentUser();
+        if ($user->isLogin()) {
+            return $this->createMessageResponse('info', '你已经登录了', null, 3000, $this->generateUrl('homepage'));
         }
+
+        $form = $this->createForm(new RegisterType());
+        
+        if ($request->getMethod() == 'POST') {
+    
+            $registration = $request->request->all();
+
+            $authSettings = $this->getSettingService()->get('auth', array());
+
+            if (array_key_exists('captcha_enabled',$authSettings) && ($authSettings['captcha_enabled'] == 1)){
+                
+                $captchaCodePostedByUser = strtolower($registration['captcha_num']);
+
+                $captchaCode = $request->getSession()->get('captcha_code');   
+              
+                if ($captchaCode != $captchaCodePostedByUser){   
+                    throw new \RuntimeException('验证码错误。');
+                }
+            }
+
+            $registration['createdIp'] = $request->getClientIp();
+
+            $user = $this->getAuthService()->register($registration);
+
+            $this->authenticateUser($user);
+            $this->sendRegisterMessage($user);
+
+            $goto = $this->generateUrl('register_submited', array(
+                'id' => $user['id'], 'hash' => $this->makeHash($user),
+                'goto' => $this->getTargetPath($request),
+            ));
+
+            if ($this->getAuthService()->hasPartnerAuth()) {
+                return $this->redirect($this->generateUrl('partner_login', array('goto' => $goto)));
+            }
+
+            $mailerSetting=$this->getSettingService()->get('mailer');
+            if(!$mailerSetting['enabled']){
+                return $this->redirect($this->getTargetPath($request));
+            }
+            return $this->redirect($goto);
+            
+        }
+
+        $auth=$this->getSettingService()->get('auth');
+
+        if(!isset($auth['registerSort']))$auth['registerSort']="";
+        
         $loginEnable  = $this->isLoginEnabled();
+
+        $userFields=$this->getUserFieldService()->getAllFieldsOrderBySeqAndEnabled();
+        for($i=0;$i<count($userFields);$i++){
+           if(strstr($userFields[$i]['fieldName'], "textField")) $userFields[$i]['type']="text";
+           if(strstr($userFields[$i]['fieldName'], "varcharField")) $userFields[$i]['type']="varchar";
+           if(strstr($userFields[$i]['fieldName'], "intField")) $userFields[$i]['type']="int";
+           if(strstr($userFields[$i]['fieldName'], "floatField")) $userFields[$i]['type']="float";
+           if(strstr($userFields[$i]['fieldName'], "dateField")) $userFields[$i]['type']="date";
+        }
+        
         return $this->render("TopxiaWebBundle:Register:index.html.twig", array(
-            'form' => $form->createView(),
-            'isLoginEnabled' => $loginEnable
+            'isLoginEnabled' => $loginEnable,
+            'registerSort'=>$auth['registerSort'],
+            'userFields'=>$userFields,
+            '_target_path' => $this->getTargetPath($request),
+        ));
+    }
+
+    public function userTermsAction(Request $request)
+    {
+        $setting = $this->getSettingService()->get('auth', array());
+
+        return $this->render("TopxiaWebBundle:Register:user-terms.html.twig", array(
+            'userTerms' => $setting['user_terms_body']
         ));
     }
 
@@ -64,7 +116,35 @@ class RegisterController extends BaseController
             'user' => $user,
             'hash' => $hash,
             'emailLoginUrl' => $this->getEmailLoginUrl($user['email']),
+            '_target_path' => $this->getTargetPath($request),
         ));
+    }
+
+    private function getTargetPath($request)
+    {
+        if ($request->query->get('goto')) {
+            $targetPath = $request->query->get('goto');
+        } else if ($request->getSession()->has('_target_path')) {
+            $targetPath = $request->getSession()->get('_target_path');
+        } else {
+            $targetPath = $request->headers->get('Referer');
+        }
+
+        if ($targetPath == $this->generateUrl('login', array(), true)) {
+            return $this->generateUrl('homepage');
+        }
+
+        $url = explode('?', $targetPath);
+
+        if ($url[0] == $this->generateUrl('partner_logout', array(), true)) {
+            return $this->generateUrl('homepage');
+        }
+
+        if ($url[0] == $this->generateUrl('password_reset_update', array(), true)) {
+            $targetPath = $this->generateUrl('homepage', array(), true);
+        }
+
+        return $targetPath;
     }
 
     public function emailVerifyAction(Request $request, $token)
@@ -115,6 +195,7 @@ class RegisterController extends BaseController
     public function emailCheckAction(Request $request)
     {
         $email = $request->query->get('value');
+        $email = str_replace('!', '.', $email);
 
         list($result, $message) = $this->getAuthService()->checkEmail($email);
 
@@ -139,6 +220,22 @@ class RegisterController extends BaseController
         return $this->createJsonResponse($response);
     }
 
+    public function captchaCheckAction(Request $request)
+    {
+        $captchaFilledByUser = strtolower($request->query->get('value'));       
+        if ($request->getSession()->get('captcha_code') == $captchaFilledByUser) {
+            $response = array('success' => true, 'message' => '验证码正确');
+        } else {
+            $response = array('success' => false, 'message' => '验证码错误');
+        }
+        return $this->createJsonResponse($response);
+    }
+
+    protected function getUserFieldService()
+    {
+        return $this->getServiceKernel()->createService('User.UserFieldService');
+    }
+
     public function getEmailLoginUrl ($email)
     {
         $host = substr($email, strpos($email, '@') + 1);
@@ -152,6 +249,31 @@ class RegisterController extends BaseController
         }
 
         return 'http://mail.' . $host;
+    }
+
+
+    public function analysisAction(Request $request)
+    {
+        return $this->render('TopxiaWebBundle:Register:analysis.html.twig',array());
+    }
+
+    public function captchaAction(Request $request)
+    {
+        $imgBuilder = new CaptchaBuilder;
+        $imgBuilder->build($width = 150, $height = 32, $font = null);
+
+        $request->getSession()->set('captcha_code',strtolower($imgBuilder->getPhrase()));
+
+        ob_start();
+        $imgBuilder->output();
+        $str = ob_get_clean();
+        $imgBuilder = null;
+        
+        $headers = array(
+            'Content-type' => 'image/jpeg',
+            'Content-Disposition' => 'inline; filename="'."reg_captcha.jpg".'"');
+        
+        return new Response($str, 200, $headers);
     }
 
     protected function getSettingService()
@@ -178,17 +300,37 @@ class RegisterController extends BaseController
     {
         $senderUser = array();
         $auth = $this->getSettingService()->get('auth', array());
-        
-        if(!empty($auth['welcome_sender'])){
-            $senderUser = $this->getUserService()->getUserByNickname($auth['welcome_sender']);
-            if(!empty($senderUser)){
-                $this->getMessageService()->sendMessage($senderUser['id'], $user['id'], $this->getWelcomeBody($user));
-                $conversation = $this->getMessageService()->getConversationByFromIdAndToId($user['id'], $senderUser['id']);
-                $this->getMessageService()->deleteConversation($conversation['id']);
-            }
+
+        if (empty($auth['welcome_enabled'])) {
+            return ;
         }
 
-        return true;
+        if ($auth['welcome_enabled'] != 'opened') {
+            return ;
+        }
+
+        if (empty($auth['welcome_sender'])) {
+            return ;
+        }
+        
+        $senderUser = $this->getUserService()->getUserByNickname($auth['welcome_sender']);
+        if (empty($senderUser)) {
+            return ;
+        }
+
+        $welcomeBody = $this->getWelcomeBody($user);
+        if (empty($welcomeBody)) {
+            return true;
+        }
+
+        if (strlen($welcomeBody) >= 1000) {
+            $welcomeBody = $this->getWebExtension()->plainTextFilter($welcomeBody, 1000);
+        }
+
+        $this->getMessageService()->sendMessage($senderUser['id'], $user['id'], $welcomeBody);
+        $conversation = $this->getMessageService()->getConversationByFromIdAndToId($user['id'], $senderUser['id']);
+        $this->getMessageService()->deleteConversation($conversation['id']);
+
     }
 
     private function getWelcomeBody($user)
@@ -215,7 +357,11 @@ class RegisterController extends BaseController
         $valuesToReplace = array($user['nickname'], $site['name'], $site['url'], $verifyurl);
         $emailTitle = str_replace($valuesToBeReplace, $valuesToReplace, $emailTitle);
         $emailBody = str_replace($valuesToBeReplace, $valuesToReplace, $emailBody);
-        $this->sendEmail($user['email'], $emailTitle, $emailBody);
+        try {
+            $this->sendEmail($user['email'], $emailTitle, $emailBody);
+        } catch(\Exception $e) {
+            $this->getLogService()->error('user', 'register', '注册激活邮件发送失败:' . $e->getMessage());
+        }
     }
 
     private function isLoginEnabled()
@@ -229,6 +375,11 @@ class RegisterController extends BaseController
            }
         }
         return true;
+    }
+
+    private function getWebExtension()
+    {
+        return $this->container->get('topxia.twig.web_extension');
     }
 
 }

@@ -1,7 +1,7 @@
 define(function(require, exports, module) {
 
     var AutoComplete = require('autocomplete');
-    var DynamicCollection = require('../widget/dynamic-collection2');
+    var DynamicCollection = require('../widget/dynamic-collection3');
     var Notify = require('common/bootstrap-notify');
     require('jquery.sortable');
 
@@ -14,12 +14,6 @@ define(function(require, exports, module) {
             onlyAddItemWithModel: true
         });
 
-        dynamicCollection.on('beforeAddItem', function(value) {
-        	if (value.length > 0) {
-        		Notify.danger('该教师不存在！');
-        	}
-        });
-
 	    var autocomplete = new AutoComplete({
 	        trigger: '#teacher-input',
 	        dataSource: $("#teacher-input").data('url'),
@@ -28,7 +22,8 @@ define(function(require, exports, module) {
 	            options: {
 	                key: 'nickname'
 	            }
-	        }
+	        },
+            selectFirst: true
 	    }).render();
 
 	    autocomplete.on('itemSelect', function(data){
@@ -47,7 +42,14 @@ define(function(require, exports, module) {
 	    	}
 		});
 
-		$(".teacher-list-group").sortable();
+        dynamicCollection.on('beforeAddItem', function(value) {
+            autocomplete.set('inputValue', null);
+            autocomplete.setInputValue(value);
+        });
+
+		$(".teacher-list-group").sortable({
+			'distance':20
+		});
 
 
     };

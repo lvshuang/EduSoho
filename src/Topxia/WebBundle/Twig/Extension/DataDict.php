@@ -9,16 +9,26 @@ class DataDict
 			'published' => '已发布',
 			'closed' => '已关闭'
 		),
+
 		'courseStatus:html' => array(
 			'draft' => '<span class="text-muted">未发布</span>',
 			'published' => '<span class="text-success">已发布</span>',
 			'closed' => '<span class="text-danger">已关闭</span>'
+		),
+		'couponType' => array(
+			'minus' => '抵价',
+			'discount' => '打折'
+		),
+		'couponStatus' => array(
+			'used' => '已使用',
+			'unused' => '未使用'
 		),
 		'fileType' => array(
 			'video' => '视频',
 			'audio' => '音频',
 			'document' => '文档',
 			'image' => '图片',
+            'ppt' => 'PPT',
 			'other' => '其他'
 		),
 		'fileType:html' => array(
@@ -57,6 +67,10 @@ class DataDict
 		'payment' => array(
 			'alipay' => '支付宝'
 		),
+		'moneyRecordType' => array(
+			'income' => '充值',
+			'payout' => '消费',
+		),
 		'threadType' => array(
 			'discussion'=> '话题',
 			'question' => '问答',
@@ -65,6 +79,16 @@ class DataDict
             'article' => '文章',
             'activity' => '活动',
             'page' => '页面',
+        ),
+	    'articleType' => array(
+            'article' => '文章',
+            'activity' => '活动',
+            'page' => '文章',
+        ),   
+        'articleProperty' => array(
+            'featured' => '头条',
+            'promoted' => '推荐',
+            'sticky' => '置顶',
         ),
         'dateType' => array(
             'today' => '今日',
@@ -84,21 +108,53 @@ class DataDict
             'unpublished' => '<span class="text-muted">未发布</span>',
             'trash' => '<span class="text-warning">回收站</span>',
     	),
+	'articleStatus' => array(
+            'published' => '已发布',
+            'unpublished' => '未发布',
+            'trash' => '回收站',
+    	),
+        'articleStatus:html' => array(
+            'published' => '<span class="text-success">已发布</span>',
+            'unpublished' => '<span class="text-muted">未发布</span>',
+            'trash' => '<span class="text-warning">回收站</span>',
+    	),
     	'lessonType'=> array(
     		'video' => '视频',
     		'audio' => '音频',
-    		'text' => '图文'
+    		'text' => '图文',
+            'ppt' => 'PPT',
+		),
+		'videoStorageType' =>array(
+			'local'=>'本地视频',
+			'cloud'=>'云视频',
+			'net'=>'网络视频',
 		),
 		'userRole' => array(
-			'ROLE_USER' => '会员',
+			'ROLE_USER' => '学员',
 			'ROLE_TEACHER' => '教师',
 			'ROLE_ADMIN' => '管理员',
 			'ROLE_SUPER_ADMIN' => '超级管理员'
 		),
+		'memberLevel' => array(
+			'1' => '银牌会员',
+			'2' => '金牌会员',
+			'3' => '钻石会员'
+		),
+		'duration_unit' => array(
+			'month' => '个月',
+			'year' => '年'
+		),
+		'boughtType' => array(
+			'new' => '购买',
+			'renew' => '续费',
+			'upgrade' => '升级',
+			'edit' => '编辑',
+			'cancel' => '取消会员'
+		),
 		'userKeyWordType' => array(
 			'nickname' => '用户名',
 			'email' => '邮件地址',
-			'loginIp' => '登陆IP'
+			'loginIp' => '登录IP'
 		),
 		'logLevel' => array(
 			'info' => '提示',
@@ -110,6 +166,26 @@ class DataDict
 			'warning' => '<span class="text-warning">警告</span>',
 			'error' => '<span class="text-danger">错误</span>'
 		),
+
+		'analysisDateType' => array(
+			'register' => '新注册用户数',
+			'login' => '用户登录数',
+			'course' => '新增课程数',
+			'lesson' => '新增课时数',
+			'joinLesson' => '加入学习数',
+			'paidLesson' => '购买课程数',
+			'finishedLesson' => '完成课时学习数',
+			'videoViewed' => '视频观看数',
+			'cloudVideoViewed' => '└─ 云视频观看数',
+			'localVideoViewed' => '└─ 本地视频观看数',
+			'netVideoViewed' => '└─ 网络视频观看数',
+			'income' => '营收额',
+			'courseIncome' => '└─ 课程营收额',
+			'courseSum' => '课程总数',
+			'userSum' => '用户总数',
+			// 'exitLesson' => '退出学习数',
+		),
+
 		'userType' => array(
 			'default' => '网站注册',
 			'weibo' => '微博登录',
@@ -117,6 +193,28 @@ class DataDict
 			'qq' => 'QQ登录',
 			'douban' => '豆瓣连接'
 		),
+		'questionType' => array(
+	    	'single_choice' => '单选题',
+	    	'choice' => '多选题',
+            'uncertain_choice' => '不定项选择题',
+	    	'fill' => '填空题',
+	    	'determine' => '判断题',
+	    	'essay' => '问答题',
+	    	'material' => '材料题',
+        ),
+        'difficulty' => array(
+	    	'simple' => '简单',
+	    	'normal' => '一般',
+	    	'difficulty' => '困难',
+        ),
+        'targetName' => array(
+        	'course' => '课程',
+        	'vip' => '会员'
+    	),
+    	'groupstatus'=>array(
+    		'open'=>'开启',
+    		'close'=>'关闭',
+    	),
 	);
 
 	public static function dict($type)

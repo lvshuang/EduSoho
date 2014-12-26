@@ -11,7 +11,7 @@ class CourseAnnouncementController extends BaseController
 
 	public function showAction(Request $request, $courseId, $id)
 	{
-		$course = $this->getCourseService()->tryTakeCourse($courseId);
+		list($course, $member) = $this->getCourseService()->tryTakeCourse($courseId);
         $announcement = $this->getCourseService()->getCourseAnnouncement($courseId, $id);
 		return $this->render('TopxiaWebBundle:Course:announcement-show-modal.html.twig',array(
 			'announcement' => $announcement,
@@ -37,6 +37,17 @@ class CourseAnnouncementController extends BaseController
 
 	    if($request->getMethod() == 'POST'){
         	$announcement = $this->getCourseService()->createAnnouncement($courseId, $request->request->all());
+
+        	if ($request->request->get('notify') == 'notify'){
+	        	$count = $this->getCourseService()->getCourseStudentCount($courseId);
+
+	        	$members = $this->getCourseService()->findCourseStudents($courseId, 0, $count);
+
+	        	$courseUrl = $this->generateUrl('course_show', array('id'=>$courseId), true);
+	        	foreach ($members as $member) {
+		        	$result = $this->getNotificationService()->notify($member['userId'], 'default', "【课程公告】你正在学习的<a href='{$courseUrl}' target='_blank'>{$course['title']}</a>发布了一个新的公告，<a href='{$courseUrl}' target='_blank'>快去看看吧</a>");
+	        	}
+	        }
 
         	return $this->createJsonResponse(true);
 		}

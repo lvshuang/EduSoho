@@ -22,12 +22,7 @@ class MessageServiceImpl extends BaseService implements MessageService
         if($fromId == $toId){
             throw $this->createServiceException("抱歉,不允许给自己发送私信!"); 
         }
-        if(empty($content)){
-            throw $this->createServiceException("抱歉,不允许发送没有内容的空私信!"); 
-        }
-        if(mb_strlen($content) > 500){
-            throw $this->createServiceException("抱歉，请指定私信内容的大小在500字以内！");
-        }
+
         $message = $this->addMessage($fromId, $toId, $content);
         $this->prepareConversationAndRelationForSender($message, $toId, $fromId);
         $this->prepareConversationAndRelationForReceiver($message, $fromId, $toId);
@@ -146,7 +141,7 @@ class MessageServiceImpl extends BaseService implements MessageService
         $message = array(
             'fromId' => $fromId,
             'toId' => $toId,
-            'content' => $content,
+            'content' => $this->purifyHtml($content),
             'createdTime' => time(),
         );
         return $this->getMessageDao()->addMessage($message);

@@ -7,6 +7,7 @@ use Symfony\Component\HttpFoundation\File\File;
 use Topxia\Common\SimpleValidator;
 use Topxia\Common\ArrayToolkit;
 use Topxia\Service\Common\BaseService;
+use Topxia\Service\Common\ServiceEvent;
 use Topxia\Service\User\UserService;
 use Topxia\Service\User\CurrentUser;
 
@@ -17,14 +18,19 @@ use Imagine\Image\ImageInterface;
 
 class UserServiceImpl extends BaseService implements UserService
 {
-    public function getUser($id)
+    public function getUser($id, $lock = false)
     {
-        $user = $this->getUserDao()->getUser($id);
+        $user = $this->getUserDao()->getUser($id, $lock);
         if(!$user){
             return null;
         } else {
             return UserSerialize::unserialize($user);
         }
+    }
+
+    public function findUsersCountByLessThanCreatedTime($endTime)
+    {
+        return $this->getUserDao()->findUsersCountByLessThanCreatedTime($endTime);
     }
 
     public function getUserProfile($id)
@@ -79,82 +85,6 @@ class UserServiceImpl extends BaseService implements UserService
         return $this->getUserDao()->searchUserCount($conditions);
     }
 
-    public function getUserlevel($id)
-    {
-        return $this->getUserlevelDao()->getUserlevel($id);
-    }
-
-    public function getUserlevelByName($name)
-    {
-        return $this->getUserlevelDao()->getUserlevelByName($name);
-    }
-
-    public function isUserlevelNameAvailable($name, $exclude=null)
-    {
-        if (empty($name)) {
-            return false;
-        }
-
-        if ($name == $exclude) {
-            return true;
-        }
-
-        $userlevel = $this->getUserlevelByName($name);
-
-        return $userlevel ? false : true;
-    }
-
-    public function searchUserlevelsCount($conditions)
-    {
-        return $this->getUserlevelDao()->searchUserlevelsCount($conditions);
-    }
-
-    public function createUserlevel($userlevel)
-    {
-        $userlevel['createdTime'] = time();
-        @$userlevel['seq'] = $this->searchUserlevelsCount()+1;
-        $userlevel = $this->getUserlevelDao()->createUserlevel($userlevel);
-
-        $this->getLogService()->info('userlevel', 'create', "添加用户等级{$userlevel['Name']}(#{$userlevel['id']})");
-
-        return $userlevel;
-    }
-
-    public function searchUserlevels($conditions, $start, $limit)
-    {
-        $userlevels = $this->getUserlevelDao()->searchUserlevels($conditions, $start, $limit);
-        return $userlevels;
-    }
-
-
-    public function updateUserlevel($id,$fields)
-    {
-        $userlevel = $this->getUserlevelDao()->updateUserlevel($id,$fields);
-        $this->getLogService()->info('userlevel', 'update', "编辑用户等级{$userlevel['Name']}(#{$userlevel['id']})");
-        return $userlevel;
-    }
-
-    public function sortUserlevels(array $ids)
-    {
-        $levelId  = 0;
-        foreach ($ids as $itemId) {
-            list(, $type) = explode("-",$itemId);
-                $levelId ++;
-                $item = $this->getUserlevel($type);
-                $fields = array('number' => $levelId);
-                if ($fields['number'] != $item['number']) {
-                    $this->updateUserlevel($item['id'], $fields);
-            }
-        }
-    }
-
-    public function deleteUserlevel($id)
-    {
-        $userlevel = $this->getUserlevel($id);
-        $this->getLogService()->info('userlevel', 'delete', "删除用户等级{$userlevel['Name']}(#{$userlevel['id']})");
-        return $this->getUserlevelDao()->deleteUserlevel($id);
-    }
-
     public function setEmailVerified($userId)
     {
         $this->getUserDao()->updateUser($userId, array('emailVerified' => 1));
@@ -166,15 +96,14 @@ class UserServiceImpl extends BaseService implements UserService
         if (empty($user)) {
             throw $this->createServiceException('用户不存在，设置帐号失败！');
         }
-
         if (!SimpleValidator::nickname($nickname)) {
             throw $this->createServiceException('用户昵称格式不正确，设置帐号失败！');
         }
-        $user = $this->getUserDao()->findUserByNickname($nickname);
-        if ($user && $user['id'] != $userId) {
+        $existUser = $this->getUserDao()->findUserByNickname($nickname);
+        if ($existUser && $existUser['id'] != $userId) {
             throw $this->createServiceException('昵称已存在！');
         }
-
+        $this->getLogService()->info('user', 'nickname_change', "修改用户名{$user['nickname']}为{$nickname}成功");
         $this->getUserDao()->updateUser($userId, array('nickname' => $nickname));
     }
 
@@ -219,8 +148,19 @@ class UserServiceImpl extends BaseService implements UserService
         $smallFilePath = "{$pathinfo['dirname']}/{$pathinfo['filename']}_small.{$pathinfo['extension']}";
         $largeImage->save($smallFilePath, array('quality' => 90));
         $smallFileRecord = $this->getFileService()->uploadFile('user', new File($smallFilePath));
-
         @unlink($filePath);
+
+        $oldAvatars = array(
+            'smallAvatar' => $user['smallAvatar'] ? $this->getKernel()->getParameter('topxia.upload.public_directory') . '/' . str_replace('public://', '', $user['smallAvatar']) : null,
+            'mediumAvatar' => $user['mediumAvatar'] ? $this->getKernel()->getParameter('topxia.upload.public_directory') . '/' . str_replace('public://', '', $user['mediumAvatar']) : null,
+            'largeAvatar' => $user['largeAvatar'] ? $this->getKernel()->getParameter('topxia.upload.public_directory') . '/' . str_replace('public://', '', $user['largeAvatar']) : null
+        );
+
+        array_map(function($oldAvatar){
+            if (!empty($oldAvatar)) {
+                @unlink($oldAvatar);
+            }
+        }, $oldAvatars);
 
         return  $this->getUserDao()->updateUser($userId, array(
             'smallAvatar' => $smallFileRecord['uri'],
@@ -286,7 +226,7 @@ class UserServiceImpl extends BaseService implements UserService
         if (!SimpleValidator::email($registration['email'])) {
             throw $this->createServiceException('email error!');
         }
-
+        
         if (!SimpleValidator::nickname($registration['nickname'])) {
             throw $this->createServiceException('nickname error!');
         }
@@ -319,12 +259,71 @@ class UserServiceImpl extends BaseService implements UserService
         $user = UserSerialize::unserialize(
             $this->getUserDao()->addUser(UserSerialize::serialize($user))
         );
-        $this->getProfileDao()->addProfile(array('id' => $user['id']));
+
+        if (isset($registration['mobile']) &&$registration['mobile']!=""&& !SimpleValidator::mobile($registration['mobile'])) {
+            throw $this->createServiceException('mobile error!');
+        }
+
+        if (isset($registration['idcard']) &&$registration['idcard']!=""&& !SimpleValidator::idcard($registration['idcard'])) {
+            throw $this->createServiceException('idcard error!');
+        }
+
+        if (isset($registration['truename']) &&$registration['truename']!=""&& !SimpleValidator::truename($registration['truename'])) {
+            throw $this->createServiceException('truename error!');
+        }
+
+        $profile = array();
+        $profile['id'] = $user['id'];
+        $profile['mobile'] = empty($registration['mobile']) ? '' : $registration['mobile'];
+        $profile['idcard'] = empty($registration['idcard']) ? '' : $registration['idcard'];
+        $profile['truename'] = empty($registration['truename']) ? '' : $registration['truename'];
+        $profile['company'] = empty($registration['company']) ? '' : $registration['company'];
+        $profile['job'] = empty($registration['job']) ? '' : $registration['job'];
+        $profile['weixin'] = empty($registration['weixin']) ? '' : $registration['weixin'];
+        $profile['weibo'] = empty($registration['weibo']) ? '' : $registration['weibo'];
+        $profile['qq'] = empty($registration['qq']) ? '' : $registration['qq'];
+        $profile['site'] = empty($registration['site']) ? '' : $registration['site'];
+        $profile['gender'] = empty($registration['gender']) ? 'secret' : $registration['gender'];
+        for($i=1;$i<=5;$i++){
+            $profile['intField'.$i] = empty($registration['intField'.$i]) ? null : $registration['intField'.$i];
+            $profile['dateField'.$i] = empty($registration['dateField'.$i]) ? null : $registration['dateField'.$i];
+            $profile['floatField'.$i] = empty($registration['floatField'.$i]) ? null : $registration['floatField'.$i];
+        }
+        for($i=1;$i<=10;$i++){
+            $profile['varcharField'.$i] = empty($registration['varcharField'.$i]) ? "" : $registration['varcharField'.$i];
+            $profile['textField'.$i] = empty($registration['textField'.$i]) ? "" : $registration['textField'.$i];
+        }
+
+        $this->getProfileDao()->addProfile($profile);
         if ($type != 'default') {
             $this->bindUser($type, $registration['token']['userId'], $user['id'], $registration['token']);
         }
 
+        $this->getDispatcher()->dispatch('user.service.registered', new ServiceEvent($user));
+
         return $user;
+    }
+
+    public function importUpdateEmail($users)
+    {
+
+        $this->getUserDao()->getConnection()->beginTransaction();
+        try{
+
+            for($i=0;$i<count($users);$i++){
+                $member = $this->getUserDao()->findUserByEmail($users[$i]["email"]);
+                $member=UserSerialize::unserialize($member);
+                $this->changePassword($member["id"],$users[$i]["password"]);
+                $this->updateUserProfile($member["id"],$users[$i]);              
+            }
+
+             $this->getUserDao()->getConnection()->commit();
+
+        }catch(\Exception $e){
+            $this->getUserDao()->getConnection()->rollback();
+            throw $e;
+        }
+
     }
 
     public function setupAccount($userId)
@@ -354,10 +353,14 @@ class UserServiceImpl extends BaseService implements UserService
         $fields = ArrayToolkit::filter($fields, array(
             'truename' => '',
             'gender' => 'secret',
+            'iam' => '',
+            'idcard'=>'',
             'birthday' => null,
             'city' => '',
             'mobile' => '',
             'qq' => '',
+            'school' => '',
+            'class' => '',
             'company' => '',
             'job' => '',
             'signature' => '',
@@ -366,7 +369,46 @@ class UserServiceImpl extends BaseService implements UserService
             'weibo' => '',
             'weixin' => '',
             'site' => '',
+            'intField1'=>null,
+            'intField2'=>null,
+            'intField3'=>null,
+            'intField4'=>null,
+            'intField5'=>null,
+            'dateField1'=>null,
+            'dateField2'=>null,
+            'dateField3'=>null,
+            'dateField4'=>null,
+            'dateField5'=>null,
+            'floatField1'=>null,
+            'floatField2'=>null,
+            'floatField3'=>null,
+            'floatField4'=>null,
+            'floatField5'=>null,
+            'textField1'=>"",
+            'textField2'=>"",
+            'textField3'=>"",
+            'textField4'=>"",
+            'textField5'=>"",
+            'textField6'=>"",
+            'textField7'=>"",
+            'textField8'=>"",
+            'textField9'=>"",
+            'textField10'=>"",
+            'varcharField1'=>"",
+            'varcharField2'=>"",
+            'varcharField3'=>"",
+            'varcharField4'=>"",
+            'varcharField5'=>"",
+            'varcharField6'=>"",
+            'varcharField7'=>"",
+            'varcharField8'=>"",
+            'varcharField9'=>"",
+            'varcharField10'=>"",
         ));
+
+        if (empty($fields)) {
+            return $this->getProfileDao()->getProfile($id);
+        }
 
         if (isset($fields['title'])) {
             $this->getUserDao()->updateUser($id, array('title' => $fields['title']));
@@ -389,9 +431,7 @@ class UserServiceImpl extends BaseService implements UserService
             throw $this->createServiceException('QQ不正确，更新用户失败。');
         }
 
-        if(!empty($fields['about'])){
-            $fields['about'] = $this->purifyHtml($fields['about']);
-        }
+        if(!empty($fields['about'])) $fields['about'] = $this->purifyHtml($fields['about']);
 
         return $this->getProfileDao()->updateProfile($id, $fields);
     }
@@ -449,6 +489,11 @@ class UserServiceImpl extends BaseService implements UserService
         return $token;
     }
 
+    public function searchTokenCount($conditions)
+    {
+        return $this->getUserTokenDao()->searchTokenCount($conditions);
+    }
+
     public function deleteToken($type, $token)
     {
         $token = $this->getUserTokenDao()->findTokenByToken($token);
@@ -500,7 +545,7 @@ class UserServiceImpl extends BaseService implements UserService
 
         $result = in_array($type, array('qq','renren','weibo', 'discuz', 'phpwind'), true);
         if(!$result) {
-            throw $this->createServiceException('获取第三方登陆信息失败,当前只支持weibo,qq,renren');
+            throw $this->createServiceException('获取第三方登录信息失败,当前只支持weibo,qq,renren');
         }
 
         return $this->getUserBindDao()->getBindByToIdAndType($type, $toId);
@@ -796,6 +841,11 @@ class UserServiceImpl extends BaseService implements UserService
         $this->getNotificationService()->notify($user['id'], 'default', $message);
         return true;
     }
+    
+    public function dropFieldData($fieldName)
+    {
+        $this->getProfileDao()->dropFieldData($fieldName);
+    }
 
     public function getUserCountByApprovalStatus($approvalStatus)
     {
@@ -825,6 +875,16 @@ class UserServiceImpl extends BaseService implements UserService
         ));
     }
 
+    public function analysisRegisterDataByTime($startTime,$endTime)
+    {
+        return $this->getUserDao()->analysisRegisterDataByTime($startTime,$endTime);
+    }
+
+    public function analysisUserSumByTime($endTime)
+    {
+        return $this->getUserDao()->analysisUserSumByTime($endTime);
+    }
+
     private function getFriendDao()
     {
         return $this->createDao("User.FriendDao");
@@ -833,11 +893,6 @@ class UserServiceImpl extends BaseService implements UserService
     private function getUserDao()
     {
         return $this->createDao('User.UserDao');
-    }
-
-    private function getUserlevelDao()
-    {
-        return $this->createDao('User.UserlevelDao');
     }
 
     private function getProfileDao()
@@ -884,6 +939,7 @@ class UserServiceImpl extends BaseService implements UserService
     {
         return new MessageDigestPasswordEncoder('sha256');
     }
+
 
 }
 

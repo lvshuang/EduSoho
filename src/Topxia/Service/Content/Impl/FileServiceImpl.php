@@ -63,7 +63,6 @@ class FileServiceImpl extends BaseService implements FileService
 			@unlink($file->getRealPath());
 			throw $this->createServiceException("该文件格式，不允许上传。");
 		}
-
 		$group = $this->getGroupDao()->findGroupByCode($group);
 		$user = $this->getCurrentUser();
 		$record = array();
@@ -161,7 +160,6 @@ class FileServiceImpl extends BaseService implements FileService
 	private function saveFile($file, $uri)
 	{
 		$parsed = $this->parseFileUri($uri);
-
 		if ($parsed['access'] == 'public') {
 			$directory = $this->getKernel()->getParameter('topxia.upload.public_directory');
 		} else {

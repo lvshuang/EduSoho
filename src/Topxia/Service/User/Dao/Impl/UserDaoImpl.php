@@ -11,9 +11,12 @@ class UserDaoImpl extends BaseDao implements UserDao
 {
     protected $table = 'user';
 
-    public function getUser($id)
+    public function getUser($id, $lock = false)
     {
         $sql = "SELECT * FROM {$this->table} WHERE id = ? LIMIT 1";
+        if ($lock) {
+            $sql .= " FOR UPDATE";
+        }
         return $this->getConnection()->fetchAssoc($sql, array($id)) ? : null;
     }
 
@@ -45,7 +48,6 @@ class UserDaoImpl extends BaseDao implements UserDao
             ->orderBy($orderBy[0], $orderBy[1])
             ->setFirstResult($start)
             ->setMaxResults($limit);
-
         return $builder->execute()->fetchAll() ? : array();
     }
 
@@ -58,12 +60,25 @@ class UserDaoImpl extends BaseDao implements UserDao
 
     private function createUserQueryBuilder($conditions)
     {
-        $conditions = array_filter($conditions);
+        $conditions = array_filter($conditions,function($v){
+            if($v === 0){
+                return true;
+            }
+                
+            if(empty($v)){
+                return false;
+            }
+            return true;
+        });
         if (isset($conditions['roles'])) {
             $conditions['roles'] = "%{$conditions['roles']}%";
         }
 
-        if(isset($conditions['keywordType'])) {
+        if (isset($conditions['role'])) {
+            $conditions['role'] = "|{$conditions['role']}|";
+        }
+
+        if(isset($conditions['keywordType']) && isset($conditions['keyword'])) {
             $conditions[$conditions['keywordType']]=$conditions['keyword'];
             unset($conditions['keywordType']);
             unset($conditions['keyword']);
@@ -73,14 +88,20 @@ class UserDaoImpl extends BaseDao implements UserDao
             $conditions['nickname'] = "%{$conditions['nickname']}%";
         }
 
-        return $this->createDynamicQueryBuilder($conditions)
+        return  $this->createDynamicQueryBuilder($conditions)
             ->from($this->table, 'user')
             ->andWhere('promoted = :promoted')
             ->andWhere('roles LIKE :roles')
+            ->andWhere('roles = :role')
             ->andWhere('nickname LIKE :nickname')
             ->andWhere('loginIp = :loginIp')
             ->andWhere('approvalStatus = :approvalStatus')
-            ->andWhere('email = :email');
+            ->andWhere('email = :email')
+            ->andWhere('level = :level')
+            ->andWhere('createdTime >= :startTime')
+            ->andWhere('createdTime <= :endTime')
+            ->andWhere('locked = :locked')
+            ->andWhere('level >= :greatLevel');
     }
 
     public function addUser($user)
@@ -116,6 +137,26 @@ class UserDaoImpl extends BaseDao implements UserDao
         }
         $sql = "UPDATE {$this->table} SET {$name} = 0 WHERE id = ? LIMIT 1";
         return $this->getConnection()->executeQuery($sql, array($id));
+    }
+
+    public function analysisRegisterDataByTime($startTime,$endTime)
+    {
+        $sql="SELECT count(id) as count, from_unixtime(createdTime,'%Y-%m-%d') as date FROM `{$this->table}` WHERE`createdTime`>={$startTime} and `createdTime`<={$endTime} group by from_unixtime(`createdTime`,'%Y-%m-%d') order by date ASC ";
+        return $this->getConnection()->fetchAll($sql);
+    }
+
+    public function analysisUserSumByTime($endTime)
+    {
+         $sql="SELECT date , max(a.Count) as count from (SELECT from_unixtime(o.createdTime,'%Y-%m-%d') as date,( SELECT count(id) as count FROM  {$this->table}   i   WHERE   i.createdTime<=o.createdTime  )  as Count from {$this->table}  o  where o.createdTime<={$endTime} order by 1,2) as a group by date ";
+         return $this->getConnection()->fetchAll($sql);
+    }
+
+        public function findUsersCountByLessThanCreatedTime($endTime)
+    {
+         
+        $sql="SELECT count(id) as count FROM `{$this->table}` WHERE  `createdTime`<={$endTime}  ";
+
+        return $this->getConnection()->fetchColumn($sql);
     }
 
 }

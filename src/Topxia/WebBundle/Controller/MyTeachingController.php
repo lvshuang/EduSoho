@@ -11,6 +11,11 @@ class MyTeachingController extends BaseController
     public function coursesAction(Request $request)
     {
         $user = $this->getCurrentUser();
+
+        if(!$user->isTeacher()) {
+            return $this->createMessageResponse('error', '您不是老师，不能查看此页面！');
+        }
+
         $paginator = new Paginator(
             $this->get('request'),
             $this->getCourseService()->findUserTeachCourseCount($user['id'], false),
@@ -24,17 +29,32 @@ class MyTeachingController extends BaseController
             false
         );
 
+        $courseSetting = $this->getSettingService()->get('course', array());
+
         return $this->render('TopxiaWebBundle:MyTeaching:teaching.html.twig', array(
             'courses'=>$courses,
-            'paginator' => $paginator
+            'paginator' => $paginator,
+            'live_course_enabled' => empty($courseSetting['live_course_enabled']) ? 0 : $courseSetting['live_course_enabled']
         ));
     }
 
 	public function threadsAction(Request $request, $type)
 	{
-
 		$user = $this->getCurrentUser();
+
+        if(!$user->isTeacher()) {
+            return $this->createMessageResponse('error', '您不是老师，不能查看此页面！');
+        }
+
 		$myTeachingCourseCount = $this->getCourseService()->findUserTeachCourseCount($user['id'], true);
+
+        if (empty($myTeachingCourseCount)) {
+            return $this->render('TopxiaWebBundle:MyTeaching:threads.html.twig', array(
+                'type'=>$type,
+                'threads' => array()
+            ));
+        }
+
 		$myTeachingCourses = $this->getCourseService()->findUserTeachCourses($user['id'], 0, $myTeachingCourseCount, true);
 
 		$conditions = array(
@@ -54,7 +74,7 @@ class MyTeachingController extends BaseController
             $paginator->getPerPageCount()
         );
 
-        $users = $this->getUserService()->findUsersByIds(ArrayToolkit::column($threads, 'userId'));
+        $users = $this->getUserService()->findUsersByIds(ArrayToolkit::column($threads, 'latestPostUserId'));
         $courses = $this->getCourseService()->findCoursesByIds(ArrayToolkit::column($threads, 'courseId'));
         $lessons = $this->getCourseService()->findLessonsByIds(ArrayToolkit::column($threads, 'lessonId'));
 
@@ -81,6 +101,11 @@ class MyTeachingController extends BaseController
     protected function getCourseService()
     {
         return $this->getServiceKernel()->createService('Course.CourseService');
+    }
+
+    protected function getSettingService()
+    {
+        return $this->getServiceKernel()->createService('System.SettingService');
     }
 
 }

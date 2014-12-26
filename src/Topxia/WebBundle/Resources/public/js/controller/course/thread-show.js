@@ -1,9 +1,11 @@
 define(function(require, exports, module) {
 
+
     var EditorFactory = require('common/kindeditor-factory');
-	var Validator = require('bootstrap.validator');
+    var Validator = require('bootstrap.validator');
 
     exports.run = function() {
+        require('./common').run();
 
         var editor = EditorFactory.create('#post_content', 'simple', {extraFileUploadParams:{group:'course'}});
 
@@ -55,6 +57,15 @@ define(function(require, exports, module) {
                     window.location.reload();
                 }
             });
+        });
+
+        $('.thread-post-list').on('click','.thread-post-action',function(){
+
+            var userName=$(this).data('user');
+         
+            editor.focus();
+            editor.insertHtml('@'+userName+'&nbsp;');
+            
         });
 
         $(".thread-post-list").on('click', '[data-action=post-delete]', function() {

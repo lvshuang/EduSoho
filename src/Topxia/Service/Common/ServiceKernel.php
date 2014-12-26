@@ -1,14 +1,20 @@
 <?php
 namespace Topxia\Service\Common;
 
+use Symfony\Component\EventDispatcher\EventDispatcher;
+
 class ServiceKernel
 {
 
     private static $_instance;
 
+    private static $_dispatcher;
+
     protected $environment;
     protected $debug;
     protected $booted;
+
+    protected $parameterBag;
 
     protected $currentUser;
 
@@ -36,6 +42,17 @@ class ServiceKernel
         }
         self::$_instance->boot();
         return self::$_instance;
+    }
+
+    public static function dispatcher()
+    {
+        if (self::$_dispatcher) {
+            return self::$_dispatcher;
+        }
+
+        self::$_dispatcher = new EventDispatcher();
+
+        return self::$_dispatcher;
     }
 
     public function boot()
@@ -72,6 +89,25 @@ class ServiceKernel
         return $this->currentUser;
     }
 
+    public function setEnvVariable(array $env)
+    {
+        $this->env = $env;
+        return $this;
+    }
+
+    public function getEnvVariable($key = null)
+    {
+        if (empty($key)) {
+            return $this->env;
+        }
+
+        if (!isset($this->env[$key])) {
+            throw new \RuntimeException("Environment variable `{$key}` is not exist.");
+        }
+
+        return $this->env[$key];
+    }
+
     public function getConnection()
     {
         if (is_null($this->connection)) {
@@ -104,6 +140,16 @@ class ServiceKernel
             $this->pool[$name] = $dao;
         }
         return $this->pool[$name];
+    }
+
+    public function getEnvironment()
+    {
+        return $this->environment;
+    }
+
+    public function isDebug()
+    {
+        return $this->debug;
     }
 
     private function getClassName($type, $name)
